@@ -2833,6 +2833,42 @@
       ],
       "probability": 0.9,
       "priority": "低"
+    },
+    {
+      "id": "SCN_093",
+      "name": "接口需登录-检测裸请求401",
+      "http_codes": [
+        "401"
+      ],
+      "response_patterns": [
+        "401",
+        "unauthorized",
+        "未登录",
+        "请先登录",
+        "token"
+      ],
+      "ui_symptoms": [
+        "浏览器能正常打开（200），检测却报 401",
+        "接口提示未登录",
+        "需要登录才能访问的接口"
+      ],
+      "root_cause": "auth",
+      "conclusion": "接口有认证保护：检测为裸请求未携带登录凭证，浏览器 200 是因为已登录（凭证问题，接口本身正常）",
+      "evidence": [
+        "第 1 步：裸请求探测 → Status 401",
+        "浏览器 F12 Network 同一请求 → Status 200（已登录状态）",
+        "同一 URL 浏览器 200 vs 检测 401 = 凭证差异，非接口故障",
+        "F12 请求标头存在 Cookie / Authorization，检测请求未携带"
+      ],
+      "solution": [
+        "检测时在『🔑 登录凭证』区粘贴 F12 请求标头里的 Cookie / Token 后重测",
+        "仅 Cookie 认证的系统：只填 Cookie 即可",
+        "Cookie + Token 双认证的系统：两个都填",
+        "重测仍 401 → 凭证已过期，回 F12 刷新页面重拿最新值",
+        "凭证由系统临时携带、不落库，验证完可清空"
+      ],
+      "probability": 0.98,
+      "priority": "高"
     }
   ]
 }
