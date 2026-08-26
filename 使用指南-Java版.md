@@ -161,17 +161,20 @@ java -jar java-backend\target\fault-detect-system.jar
 
 **关键提醒**：务必填**浏览器地址栏或 F12 Network 中实际出错的请求地址**（红色那条），而不是首页地址。填错地址会测错目标。
 
-### 4.2.1 🔑 接口需要登录/Token 怎么检测？（自定义请求头）
+### 4.2.1 🔑 接口需要登录/Token 怎么检测？（登录凭证）
 
 系统探测是**裸请求**（不携带任何登录凭证）。如果接口需要登录，不带凭证检测会得到 401（未授权）——**这是正确的**，说明接口有认证保护。
 
-想让检测携带凭证，点检测表单里的 **"▼ 🔑 接口需要登录/Token？点这里填请求头"**，展开后填 JSON：
+想让检测携带凭证，点检测表单里的 **"▼ 🔑 接口需要登录/Token？点这里填凭证"**，展开后有两个输入框：
 
-```json
-{"Authorization": "Bearer 你的Token", "Cookie": "JSESSIONID=xxxxxx"}
-```
+| 输入框 | 填什么 | 示例 |
+|--------|--------|------|
+| **Cookie 值** | F12 请求头里的 Cookie 整段值 | `JSESSIONID=FECC6133FD8FB19F5BBBA6BF5053F9E9` |
+| **Token / Authorization 值** | F12 请求头里的 Authorization 值（带不带 Bearer 都行，系统自动补） | `Bearer K_q7YgCwR8YyjYUnV8UUJDfR6M6yOdrK` 或 `K_q7YgCwR8YyjYUnV8UUJDfR6M6yOdrK` |
 
-**怎么拿这些值**：浏览器 **F12 → Network → 点失败的请求 → 请求头（Request Headers）**，把 `Authorization` / `Cookie` 的值复制进来即可。检测时会原样携带这些请求头。
+**直接复制粘贴即可，系统自动拼接成请求头，不用写任何括号/引号。**
+
+**怎么拿这些值**：浏览器 **F12 → Network → 点失败的请求 → 标头（Headers）→ 往下滚到「请求标头（Request Headers）」**，复制 `Cookie:` 和 `Authorization:` 后面的值。注意：凭证在**请求标头**，不在响应标头。
 
 **典型场景对照**：
 
@@ -569,7 +572,7 @@ java -jar java-backend\target\fault-detect-system.jar --server.port=8088
 
 - **原因**：检测是"裸请求"，不带你浏览器里的登录凭证（Cookie/Token）。接口需要登录时，裸请求必然 401——这是**正确的**，说明接口有认证保护
 - **浏览器能 200**：因为浏览器已登录，请求自动携带了凭证
-- **解决**：按 4.2.1 填写自定义请求头（从 F12 复制 Authorization/Cookie），再检测即可得到真实结果
+- **解决**：按 4.2.1 在检测表单展开"登录凭证"，粘贴 Cookie / Token 后再检测，即可得到真实结果
 - **补充**：检测目标填 `localhost` 且系统跑在 Docker 里时，结果会是 502（容器内 localhost 不是你的电脑），改用本机 IP（如 `http://192.168.1.213:端口/路径`）
 
 ---

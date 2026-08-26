@@ -146,18 +146,23 @@ input[type="text"]:focus, input[type="url"]:focus, select:focus, textarea:focus 
 textarea { resize: vertical; }
 .hdr-toggle { font-size: 13px; color: var(--primary); cursor: pointer; text-decoration: none; user-select: none; }
 .hdr-toggle:hover { text-decoration: underline; }
-.hdr-box { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
-.hdr-box textarea {
+.hdr-box { margin-top: 8px; display: flex; flex-direction: column; gap: 8px; }
+.hdr-field { display: flex; flex-direction: column; gap: 4px; }
+.hdr-field label { font-size: 12px; color: var(--text-dim); }
+.hdr-field input {
     background: var(--bg-inset);
     border: 1px dashed var(--border);
     color: var(--text);
     border-radius: 6px;
-    padding: 10px 12px;
+    padding: 9px 12px;
     font-size: 13px;
     font-family: Consolas, "Courier New", monospace;
     outline: none;
+    width: 100%;
+    box-sizing: border-box;
 }
-.hdr-box textarea:focus { border-color: var(--primary); border-style: solid; }
+.hdr-field input:focus { border-color: var(--primary); border-style: solid; }
+.hdr-field input::placeholder { color: var(--text-dim); opacity: .7; }
 .checkbox { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text); cursor: pointer; padding-top: 6px; }
 .checkbox input { width: 16px; height: 16px; accent-color: var(--primary); }
 

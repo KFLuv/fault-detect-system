@@ -28,14 +28,21 @@
                     </select>
                 </div>
             </div>
-            <!-- 认证 / 自定义请求头（可选） -->
+            <!-- 认证 / 登录凭证（可选） -->
             <div class="form-group" style="margin-bottom: 12px;">
                 <a class="hdr-toggle" @click="form.headersOpen = !form.headersOpen">
-                    {{ form.headersOpen ? '▲ 收起认证设置' : '▼ 🔑 接口需要登录/Token？点这里填请求头（可选）' }}
+                    {{ form.headersOpen ? '▲ 收起认证设置' : '▼ 🔑 接口需要登录/Token？点这里填凭证（可选）' }}
                 </a>
                 <div v-if="form.headersOpen" class="hdr-box">
-                    <textarea v-model="form.headersText" rows="3" placeholder='JSON 格式，例如：&#10;{"Authorization": "Bearer 你的Token", "Cookie": "JSESSIONID=xxxxxx"}'></textarea>
-                    <p class="hint">从浏览器 F12 → Network → 点失败的请求 → 请求头（Request Headers）里复制 Authorization / Cookie 等，粘贴到这里，检测时会原样携带。</p>
+                    <div class="hdr-field">
+                        <label>Cookie 值</label>
+                        <input v-model="form.cookieVal" placeholder="从 F12 请求头复制粘贴，如 JSESSIONID=xxxxxx（直接粘，不用加引号）" />
+                    </div>
+                    <div class="hdr-field">
+                        <label>Token / Authorization 值</label>
+                        <input v-model="form.tokenVal" placeholder="从 F12 请求头复制粘贴，如 Bearer K_q7xxx 或只粘 xxx（自动补 Bearer）" />
+                    </div>
+                    <p class="hint">从浏览器 F12 → Network → 点请求 → 请求头（Request Headers）里复制，粘贴到上面即可，系统会自动拼接。检测时会原样携带。</p>
                 </div>
             </div>
             <div class="btn-row">
@@ -124,7 +131,7 @@ import { pickStatusTeach, pickCategoryTeach } from '../teaching-data'
 import TeachingTab from './TeachingTab.vue'
 
 const emit = defineEmits(['changed'])
-const form = reactive({ url: '', symptom: '', serviceCheck: true, timeout: '10', headersText: '', headersOpen: false })
+const form = reactive({ url: '', symptom: '', serviceCheck: true, timeout: '10', cookieVal: '', tokenVal: '', headersOpen: false })
 const loading = ref(false)
 const report = ref(null)
 const reportEl = ref(null)
@@ -133,19 +140,14 @@ const reportEl = ref(null)
 function detect() {
     const url = form.url.trim()
     if (!url) { alert('请输入故障 URL'); return }
-    // 解析可选的自定义请求头（JSON 格式）
+    // 自动拼接登录凭证（Cookie / Token），无需手动写 JSON
+    const cookie = form.cookieVal.trim()
+    const token = form.tokenVal.trim()
     let headers = null
-    const ht = form.headersText.trim()
-    if (ht) {
-        try {
-            const obj = JSON.parse(ht)
-            if (typeof obj !== 'object' || obj === null || Array.isArray(obj)) throw new Error('需为 JSON 对象')
-            headers = {}
-            for (const k of Object.keys(obj)) headers[k] = String(obj[k])
-        } catch (e) {
-            alert('请求头 JSON 格式不正确：' + e.message + '\n示例：{"Authorization": "Bearer xxx"}')
-            return
-        }
+    if (cookie || token) {
+        headers = {}
+        if (cookie) headers['Cookie'] = cookie
+        if (token) headers['Authorization'] = /^Bearer\s+/i.test(token) ? token : 'Bearer ' + token
     }
     loading.value = true
     api('/api/detect', {
@@ -289,6 +291,8 @@ function loadDemo() {
 function clear() {
     form.url = ''
     form.symptom = ''
+    form.cookieVal = ''
+    form.tokenVal = ''
     report.value = null
 }
 </script>
