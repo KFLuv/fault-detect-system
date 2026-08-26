@@ -1,0 +1,16 @@
+# 故障检测系统 - Java 版 Docker Compose
+# 使用：docker compose -f docker-compose-java.yml up -d
+# 访问：http://localhost:8000
+services:
+  fault-detect-system-java:
+    build:
+      context: ./java-backend
+      dockerfile: Dockerfile
+    image: fault-detect-system-java:latest
+    container_name: fault-detect-system-java
+    ports:
+      - "8000:8000"
+    volumes:
+      # 数据库 + 自定义场景持久化到宿主机 ./data 目录
+      - ./data:/app/data
+    restart: unless-stopped

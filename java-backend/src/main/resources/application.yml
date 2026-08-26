@@ -1,0 +1,8 @@
+server:
+  port: 8000
+
+spring:
+  application:
+    name: fault-detect-system
+  jackson:
+    default-property-inclusion: always
