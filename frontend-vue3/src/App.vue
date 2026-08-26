@@ -34,7 +34,7 @@
         <DetectTab v-show="tab === 'detect'" @changed="reloadStats" />
         <ScenariosTab v-show="tab === 'scenarios'" />
         <StatusCodesTab v-show="tab === 'status-codes'" />
-        <HistoryTab v-show="tab === 'history'" @changed="reloadStats" />
+        <HistoryTab v-show="tab === 'history'" :active="tab === 'history'" @changed="reloadStats" />
         <AddScenarioTab v-show="tab === 'add'" @saved="reloadStats" />
     </main>
 

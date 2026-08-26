@@ -26,12 +26,20 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { api, catColor, guessCategory } from '../api'
 
 const emit = defineEmits(['changed'])
+const props = defineProps({
+    active: { type: Boolean, default: false }
+})
 const list = ref([])
 let timer = null
+
+// 切到历史页签时立即刷新（解决 v-show 保持挂载、切换后不加载的问题）
+watch(() => props.active, (v) => {
+    if (v) load()
+})
 
 async function load() {
     try {
