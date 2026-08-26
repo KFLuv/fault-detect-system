@@ -1,8 +1,8 @@
 # 🔍 故障检测系统 · 使用指南（Java 版）
 
-> 版本：v1.1（Java）｜ 适用对象：现场实施 / 交付 / 运维人员
+> 版本：v2.0（Java + Vue3 前端）｜ 适用对象：现场实施 / 交付 / 运维人员
 > 系统位置：`e:\Desktop\中广核驻场实战手册\故障检测系统\fault-detect-system\`
-> 后端技术：Spring Boot 2.7 + Java 11 + SQLite（与原 Python 版功能 1:1 对齐，接口/知识库/打分规则一致）
+> 后端技术：Spring Boot 2.7 + Java 11 + SQLite；前端技术：Vue 3 + Vite 5（与原 Python 版功能 1:1 对齐，接口/知识库/打分规则一致）
 
 ---
 
@@ -40,6 +40,8 @@
 | **完整覆盖** | 内置 **92 个场景** × **32 个状态码** 的知识库 |
 | **证据链闭环** | 每一步检测都有实时证据 + 知识库证据 |
 | **专业报告** | 3 段式汇报模板（现象→排查→结论），一键复制 |
+| **动态教学** | 检测后自动展示"本次故障 · 手动排障教学"，按状态码 + 归属动态对应，另附 7 步总纲 |
+| **日夜模式** | 一键切换亮色/深色主题，选择自动保存 |
 | **灵活扩展** | 支持随时新增自定义场景（立即生效、持久化保存） |
 | **独立部署** | Docker 容器或本地 jar 运行，数据存在本地，无需联网 |
 
@@ -120,15 +122,17 @@ java -jar java-backend\target\fault-detect-system.jar
 
 ## 三、界面总览
 
-系统采用 5 个页签布局：
+系统采用 5 个页签布局，顶部导航右侧有两个快捷按钮：
 
-| 页签 | 功能 | 图标 |
+| 页签/按钮 | 功能 | 图标 |
 |------|------|------|
 | **故障检测** | 核心功能：输入 URL 一键诊断 | 🛠️ |
 | **场景库** | 浏览/搜索/筛选 92 个故障场景 | 📚 |
 | **状态码** | 32 个 HTTP 状态码速查 | 🔢 |
 | **历史记录** | 查看历次检测记录 | 🕘 |
 | **新增场景** | 自定义添加场景（自动保存） | ➕ |
+| **日夜模式** | 切换亮色/深色主题（选择自动保存，下次打开保持） | 🌙/☀️ |
+| **刷新** | 一键重新加载页面数据 | 🔄 |
 
 顶部统计栏实时显示：场景库数量、状态码数量、自定义场景数量、历史记录条数。每次检测/新增场景后自动刷新。
 
@@ -177,12 +181,12 @@ java -jar java-backend\target\fault-detect-system.jar
 | 步骤 | 检测项 | 说明 |
 |------|--------|------|
 | 0 | URL 解析 | 提取协议/主机/端口/路径 |
-| 0 | 服务存活检测（TCP） | 模拟 Test-NetConnection 验证端口连通 |
+| 0 | 服务存活检测（TCP） | 模拟 Test-NetConnection 验证端口连通（与 HTTP 探测**并行执行**，加快速度） |
 | 1 | HTTP 请求探测 | 实际请求目标，捕获状态码、耗时、响应体 |
 | 2 | 状态码分析 | 对照 SOP 状态码速查表给出分析 |
 | 3 | 响应数据分析 | 提取响应体特征（JSON 空数组、错误关键词等） |
 | 4 | 证据收集 | 自动固定 URL/状态码/耗时/响应体长度 |
-| 5 | 分支判断 | 500→日志分析；200+空数组→数据库排查；其他→Postman 隔离验证 |
+| 5 | 分支判断 | 500→日志分析；200+空数组→数据库排查；其他→**自动完成前后端隔离验证**（等价 Postman，无需手动） |
 
 各状态码在第 5 步的走向：
 
@@ -190,7 +194,9 @@ java -jar java-backend\target\fault-detect-system.jar
 |--------|------------|
 | 500 | 必须查后端日志，定位第一个 Caused by |
 | 200 + 空数组 | 必须查数据库（表是否存在/是否有数据） |
-| 其他（400/401/404/504…） | Postman 隔离验证：Postman 正常=前端问题；也报错=后端/网络问题 |
+| 其他（400/401/404/504…） | 自动完成前后端隔离验证：以"裸请求"（无浏览器 Cookie/JS 环境）复测目标，裸请求正常=前端问题；裸请求同样报错=后端/网络问题 |
+
+> 💡 **等价 Postman 的自动隔离验证**：系统第 1 步 HTTP 探测本身就是"裸请求"（不携带浏览器 Cookie/JS 环境），自动完成 Postman 隔离验证的核心动作。报告第 5 步会直接给出"前端问题 / 后端问题 / 网络问题"的判定方向，**无需再手动打开 Postman**。
 
 ### 4.5 典型使用场景示例
 
@@ -220,6 +226,18 @@ URL：   http://192.168.1.100:8081/api/user/delete
 ```
 
 预期结果：状态码 500 → 判定后端代码问题（置信度 83%~95%），步骤 5 提示"必须查后端日志"。
+
+### 4.6 📖 动态教学模块（本次故障 · 手动排查教学）
+
+检测完成后，结果区下方自动展示教学卡片，**内容与本次故障动态对应**：
+
+| 教学卡 | 内容 | 对应关系 |
+|--------|------|---------|
+| **状态码教学** | 该状态码（如 401/500/504/连接拒绝…）的完整手动排查步骤：先做什么、再看什么、最后验证什么 | 按本次 `status_code` 动态匹配 |
+| **归属教学** | 该问题归属（前端/后端/数据库/网络/登录/权限/服务/配置/性能/业务）的排查方向 | 按本次 `root_cause` 动态匹配 |
+| **7 步总纲** | 完整手动排障 SOP 总纲（可展开），供系统学习 | 固定章节，随时可学 |
+
+**用法**：这是给实施/运维新人学习用的——**先让系统自动检测拿到结论，再对照教学卡学习"如果纯手动，我应该怎么做"**。检测一个 401 未登录问题，教学卡就会展示"401 · 未授权 → 先检查是否登录、Token 是否携带、Token 是否过期"等完整手动步骤；检测一个 504 超时问题，就会展示"504 · 网关超时 → 后端处理太久，先定位慢在哪一层"。
 
 ---
 
@@ -505,8 +523,9 @@ java -jar java-backend\target\fault-detect-system.jar --server.port=8088
 ### Q11：浏览器打开页面样式乱/无样式？
 
 - 确认访问的是 `http://localhost:8000` 根路径
-- 强制刷新（Ctrl+F5）清除缓存
-- 确认 `/static/style.css` 可访问（浏览器地址栏输入 http://localhost:8000/static/style.css）
+- 前端为 Vue3 构建产物（`/assets/index-*.js`、`/assets/index-*.css`），不存在 `/static/style.css`
+- 静态资源已配置 no-store，正常无需清缓存；若浏览器仍显示旧页面，**Ctrl+F5** 强制刷新
+- 检查浏览器控制台（F12）是否有红色报错
 
 ### Q12：场景库只显示 1 个场景卡片？
 
@@ -547,16 +566,20 @@ fault-detect-system/
 │   │   └── fault-detect-system.jar  # 打包产物（重新部署时使用）
 │   └── src/main/
 │       ├── java/com/cgn/faultdetect/  # 后端源码（8 个类）
-│       └── resources/                 # 配置 + 知识库 JSON + 前端页面
-├── frontend/static/            # 前端源文件（改前端改这里）
-│   ├── index.html
-│   ├── style.css
-│   └── app.js
+│       └── resources/                 # 配置 + 知识库 JSON + 前端构建产物
+├── frontend-vue3/              # 前端工程（Vue 3 + Vite 5，改前端改这里）
+│   ├── src/
+│   │   ├── App.vue             # 主界面（5 页签 + 日夜/刷新按钮）
+│   │   ├── style.css           # 全局样式（含日夜主题变量）
+│   │   └── components/         # 检测/场景库/状态码/历史/新增/教学组件
+│   ├── package.json            # npm 依赖
+│   └── vite.config.js          # 构建配置（含 /api 代理）
+├── frontend/static/            # 原静态版前端（保留，已不用于打包）
 ├── backend/                    # 原 Python 版（保留，功能相同）
 └── 使用指南-Java版.md           # 本文档
 ```
 
-> ⚠️ 前端有两份：`frontend/static/`（源）和 `java-backend/src/main/resources/static/`（打包用）。**修改前端时必须两处同步改**（或只改 frontend 后复制到 resources），否则打包出来的界面与源不一致。
+> ⚠️ 前端工程为 **Vue3（frontend-vue3/）**。修改前端后需：`npm run build` 构建 → 将 `dist` 集成进 `java-backend/src/main/resources/static/` → 重新打包 jar。原 `frontend/static/`（原生 JS 版）仅作保留，不再参与打包。前端静态资源已配置 `Cache-Control: no-store`，部署新版本后浏览器无需清缓存。
 
 ### 12.2 Docker 常用命令
 
@@ -572,14 +595,20 @@ fault-detect-system/
 ### 12.3 重新部署流程（修改代码/前端后）
 
 ```powershell
-# 1. 重新打包 jar
+# ① 修改了前端（Vue3 工程）时：先构建并集成
+cd frontend-vue3
+npm install        # 首次
+npm run build      # 生成 dist
+# 将 dist 内容集成到 java-backend/src/main/resources/static/（见构建说明）
+
+# ② 重新打包 jar
 E:\apache-maven-3.9.16\bin\mvn.cmd -f java-backend\pom.xml clean package -DskipTests
 
-# 2. 重新构建镜像并启动（Docker 方式）
+# ③ 重新构建镜像并启动（Docker 方式）
 docker compose -f docker-compose-java.yml up -d --build
 ```
 
-打包成功后在 `java-backend\target\` 生成 `fault-detect-system.jar`。
+打包成功后在 `java-backend\target\` 生成 `fault-detect-system.jar`。仅改后端 Java 代码时，跳过 ① 直接执行 ②③。
 
 ### 12.4 数据备份与恢复
 
@@ -725,7 +754,8 @@ Invoke-RestMethod http://localhost:8000/api/add-scenario -Method Post -ContentTy
 **使用建议**：
 1. 现场排查时先让系统跑一遍，拿到证据链再人工确认
 2. 遇到知识库未覆盖的新问题，随时"新增场景"沉淀为团队资产
-3. 推荐用 Docker 方式部署（`docker compose -f docker-compose-java.yml up -d`）
-4. 修改前端后记得两处文件同步 + 重新打包 + 重启服务
+3. 检测后务必展开"📖 本次故障 · 手动排查教学"，对照学习手动排障方法
+4. 推荐用 Docker 方式部署（`docker compose -f docker-compose-java.yml up -d`）
+5. 修改前端（Vue3）后：`npm run build` → 集成 dist → 重新打包 → 重启服务
 
 祝排障顺利！🚀
