@@ -28,6 +28,16 @@
                     </select>
                 </div>
             </div>
+            <!-- 认证 / 自定义请求头（可选） -->
+            <div class="form-group" style="margin-bottom: 12px;">
+                <a class="hdr-toggle" @click="form.headersOpen = !form.headersOpen">
+                    {{ form.headersOpen ? '▲ 收起认证设置' : '▼ 🔑 接口需要登录/Token？点这里填请求头（可选）' }}
+                </a>
+                <div v-if="form.headersOpen" class="hdr-box">
+                    <textarea v-model="form.headersText" rows="3" placeholder='JSON 格式，例如：&#10;{"Authorization": "Bearer 你的Token", "Cookie": "JSESSIONID=xxxxxx"}'></textarea>
+                    <p class="hint">从浏览器 F12 → Network → 点失败的请求 → 请求头（Request Headers）里复制 Authorization / Cookie 等，粘贴到这里，检测时会原样携带。</p>
+                </div>
+            </div>
             <div class="btn-row">
                 <button class="btn btn-primary" @click="detect" :disabled="loading">🚀 开始检测</button>
                 <button class="btn btn-ghost" @click="loadDemo">📚 加载示例</button>
@@ -114,7 +124,7 @@ import { pickStatusTeach, pickCategoryTeach } from '../teaching-data'
 import TeachingTab from './TeachingTab.vue'
 
 const emit = defineEmits(['changed'])
-const form = reactive({ url: '', symptom: '', serviceCheck: true, timeout: '10' })
+const form = reactive({ url: '', symptom: '', serviceCheck: true, timeout: '10', headersText: '', headersOpen: false })
 const loading = ref(false)
 const report = ref(null)
 const reportEl = ref(null)
@@ -123,6 +133,20 @@ const reportEl = ref(null)
 function detect() {
     const url = form.url.trim()
     if (!url) { alert('请输入故障 URL'); return }
+    // 解析可选的自定义请求头（JSON 格式）
+    let headers = null
+    const ht = form.headersText.trim()
+    if (ht) {
+        try {
+            const obj = JSON.parse(ht)
+            if (typeof obj !== 'object' || obj === null || Array.isArray(obj)) throw new Error('需为 JSON 对象')
+            headers = {}
+            for (const k of Object.keys(obj)) headers[k] = String(obj[k])
+        } catch (e) {
+            alert('请求头 JSON 格式不正确：' + e.message + '\n示例：{"Authorization": "Bearer xxx"}')
+            return
+        }
+    }
     loading.value = true
     api('/api/detect', {
         method: 'POST',
@@ -132,6 +156,7 @@ function detect() {
             symptom: form.symptom.trim(),
             enable_service_check: form.serviceCheck,
             timeout: parseInt(form.timeout, 10),
+            headers: headers,
         }),
     }).then((data) => {
         report.value = data

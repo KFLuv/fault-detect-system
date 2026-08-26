@@ -17,6 +17,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.regex.Pattern;
 
 /**
  * API 控制器（接口与 Python 版完全一致）
@@ -53,6 +54,7 @@ public class ApiController {
         public String symptom = "";
         public boolean enable_service_check = true;
         public int timeout = 10;
+        public Map<String, String> headers;   // 可选：自定义请求头（Token/Cookie 等）
     }
 
     public static class AddScenarioRequest {
@@ -67,6 +69,31 @@ public class ApiController {
     }
 
     // ================= 辅助 =================
+
+    private static final Pattern HEADER_NAME = Pattern.compile("^[A-Za-z0-9-]+$");
+
+    /**
+     * 校验自定义请求头：名称只允许字母/数字/连字符，值禁止换行（防 header 注入）。
+     * 返回规范化后的请求头；null 表示未提供。
+     */
+    private Map<String, String> validateHeaders(Map<String, String> headers) {
+        if (headers == null || headers.isEmpty()) {
+            return null;
+        }
+        Map<String, String> clean = new LinkedHashMap<>();
+        for (Map.Entry<String, String> e : headers.entrySet()) {
+            String k = e.getKey();
+            String v = e.getValue();
+            if (k == null || !HEADER_NAME.matcher(k).matches()) {
+                throw new ApiException(400, "请求头名称不合法：" + k);
+            }
+            if (v != null && (v.contains("\r") || v.contains("\n"))) {
+                throw new ApiException(400, "请求头值包含非法字符：" + k);
+            }
+            clean.put(k, v == null ? "" : v);
+        }
+        return clean;
+    }
 
     private List<Scenario> allScenarios() {
         List<Scenario> all = new ArrayList<>(knowledge.scenarios);
@@ -127,7 +154,8 @@ public class ApiController {
         detectEngine.parseUrl(url);
 
         int timeout = Math.max(3, Math.min(req.timeout, 30));
-        DetectionResult dr = detectEngine.runDetection(url, req.enable_service_check, true, timeout);
+        Map<String, String> headers = validateHeaders(req.headers);
+        DetectionResult dr = detectEngine.runDetection(url, req.enable_service_check, true, timeout, headers);
         String symptom = req.symptom == null ? "" : req.symptom;
         Map<String, Object> report = matcherEngine.buildReport(dr, symptom, 3);
 

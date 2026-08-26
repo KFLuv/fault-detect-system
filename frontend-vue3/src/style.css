@@ -144,6 +144,20 @@ input[type="text"]:focus, input[type="url"]:focus, select:focus, textarea:focus 
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
 }
 textarea { resize: vertical; }
+.hdr-toggle { font-size: 13px; color: var(--primary); cursor: pointer; text-decoration: none; user-select: none; }
+.hdr-toggle:hover { text-decoration: underline; }
+.hdr-box { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+.hdr-box textarea {
+    background: var(--bg-inset);
+    border: 1px dashed var(--border);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-size: 13px;
+    font-family: Consolas, "Courier New", monospace;
+    outline: none;
+}
+.hdr-box textarea:focus { border-color: var(--primary); border-style: solid; }
 .checkbox { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text); cursor: pointer; padding-top: 6px; }
 .checkbox input { width: 16px; height: 16px; accent-color: var(--primary); }
 
@@ -250,7 +264,7 @@ textarea { resize: vertical; }
     border-radius: 6px;
     padding: 8px 12px;
     font-size: 13px;
-    color: #c3cbe0;
+    color: var(--code-text);
     word-break: break-all;
     font-family: Consolas, "Courier New", monospace;
     white-space: pre-wrap;
@@ -269,7 +283,7 @@ textarea { resize: vertical; }
 .evidence-title { font-size: 13px; font-weight: 600; color: var(--text-dim); margin-bottom: 4px; }
 .evidence-content {
     font-size: 13px;
-    color: #c3cbe0;
+    color: var(--code-text);
     font-family: Consolas, "Courier New", monospace;
     word-break: break-all;
     white-space: pre-wrap;
@@ -333,7 +347,7 @@ textarea { resize: vertical; }
     font-size: 13px;
     line-height: 1.9;
     white-space: pre-wrap;
-    color: #c3cbe0;
+    color: var(--code-text);
     max-height: 380px;
     overflow-y: auto;
 }
@@ -372,7 +386,7 @@ textarea { resize: vertical; }
 .sc-detail { margin-top: 10px; border-top: 1px dashed var(--border); padding-top: 10px; display: none; }
 .scenario-card.open .sc-detail { display: block; }
 .sc-detail .d-label { font-size: 12px; color: var(--text-dim); margin: 8px 0 4px; }
-.sc-detail ul { padding-left: 18px; font-size: 13px; color: #c3cbe0; }
+.sc-detail ul { padding-left: 18px; font-size: 13px; color: var(--code-text); }
 .sc-detail li { margin: 3px 0; }
 
 /* ================= 状态码 ================= */

@@ -173,6 +173,10 @@ public class DetectEngine {
     }
 
     public ProbeResult httpProbe(String url, int timeoutSec) {
+        return httpProbe(url, timeoutSec, null);
+    }
+
+    public ProbeResult httpProbe(String url, int timeoutSec, Map<String, String> headers) {
         ProbeResult r = new ProbeResult();
         long start = System.currentTimeMillis();
         try {
@@ -184,10 +188,16 @@ public class DetectEngine {
                     .proxy(ProxySelector.of(null))
                     .sslContext(trustAllSslContext())
                     .build();
-            HttpRequest req = HttpRequest.newBuilder(URI.create(url))
+            HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url))
                     .timeout(Duration.ofSeconds(timeoutSec))
-                    .GET()
-                    .build();
+                    .GET();
+            // 自定义请求头（支持带 Token/Cookie 检测需要认证的接口）
+            if (headers != null && !headers.isEmpty()) {
+                for (Map.Entry<String, String> e : headers.entrySet()) {
+                    builder.header(e.getKey(), e.getValue());
+                }
+            }
+            HttpRequest req = builder.build();
             HttpResponse<String> resp = client.send(req, HttpResponse.BodyHandlers.ofString());
             r.statusCode = resp.statusCode();
             r.statusText = String.valueOf(resp.statusCode());
@@ -308,6 +318,11 @@ public class DetectEngine {
     }
 
     public DetectionResult runDetection(String url, boolean enableServiceCheck, boolean enableDbCheck, int timeout) {
+        return runDetection(url, enableServiceCheck, enableDbCheck, timeout, null);
+    }
+
+    public DetectionResult runDetection(String url, boolean enableServiceCheck, boolean enableDbCheck, int timeout,
+                                        Map<String, String> headers) {
         DetectionResult dr = new DetectionResult();
         try {
             dr.parsed = parseUrl(url);
@@ -331,7 +346,7 @@ public class DetectEngine {
                     ? CompletableFuture.supplyAsync(() -> tcpCheck(parsed.host, parsed.port, 5), pool)
                     : CompletableFuture.completedFuture(null);
             CompletableFuture<ProbeResult> httpFuture =
-                    CompletableFuture.supplyAsync(() -> httpProbe(parsed.url, timeout), pool);
+                    CompletableFuture.supplyAsync(() -> httpProbe(parsed.url, timeout, headers), pool);
             service = tcpFuture.join();
             probe = httpFuture.join();
         } finally {
