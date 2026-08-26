@@ -3,6 +3,7 @@ package com.cgn.faultdetect;
 import com.cgn.faultdetect.DetectEngine.DetectionResult;
 import com.cgn.faultdetect.Knowledge.Scenario;
 import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -226,6 +227,16 @@ public class ApiController {
     public Map<String, Object> history(@RequestParam(defaultValue = "30") int limit) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("history", history.listHistory(limit));
+        return m;
+    }
+
+    /** 一键清空检测历史记录 */
+    @DeleteMapping("/api/history")
+    public Map<String, Object> clearHistory() {
+        history.clearHistory();
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("status", "ok");
+        m.put("history_count", history.listHistory(9999).size());
         return m;
     }
 

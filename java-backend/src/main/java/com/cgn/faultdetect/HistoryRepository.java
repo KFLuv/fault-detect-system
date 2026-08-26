@@ -141,6 +141,15 @@ public class HistoryRepository {
         }
     }
 
+    public void clearHistory() {
+        try (Connection conn = open();
+             Statement st = conn.createStatement()) {
+            st.executeUpdate("DELETE FROM detect_history");
+        } catch (SQLException e) {
+            throw new IllegalStateException("清空历史失败", e);
+        }
+    }
+
     public List<Map<String, Object>> listHistory(int limit) {
         List<Map<String, Object>> rows = new ArrayList<>();
         String sql = "SELECT id, ts, url, status_code, root_cause, scenario_name, confidence "

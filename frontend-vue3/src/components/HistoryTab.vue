@@ -3,7 +3,10 @@
         <div class="card">
             <div class="toolbar">
                 <h2>🕘 检测历史记录</h2>
-                <button class="btn btn-ghost" @click="load">🔄 刷新</button>
+                <div class="tb-actions">
+                    <button class="btn btn-ghost" @click="load">🔄 刷新</button>
+                    <button v-if="list.length" class="btn btn-ghost danger" @click="clearAll">🗑️ 清空历史</button>
+                </div>
             </div>
             <div v-if="!list.length" class="empty-tip">暂无检测历史</div>
             <div v-else class="history-list">
@@ -36,6 +39,18 @@ async function load() {
         list.value = data.history || []
     } catch (e) {
         console.error('加载历史失败', e)
+    }
+}
+
+async function clearAll() {
+    if (!confirm('确定要清空全部检测历史记录吗？此操作不可恢复。')) return
+    try {
+        await api('/api/history', { method: 'DELETE' })
+        list.value = []
+        emit('changed')
+    } catch (e) {
+        console.error('清空历史失败', e)
+        alert('清空历史失败：' + e.message)
     }
 }
 

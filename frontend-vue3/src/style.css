@@ -180,6 +180,10 @@ textarea { resize: vertical; }
 .btn-primary:hover { background: var(--primary-hover); }
 .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--text-dim); }
 .btn-ghost:hover { color: var(--text); border-color: var(--primary); }
+.btn-ghost.danger { color: #e05c5c; }
+.btn-ghost.danger:hover { color: #c94a4a; border-color: #e05c5c; }
+
+.tb-actions { display: flex; gap: 8px; margin-left: auto; }
 
 .toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
 .toolbar input[type="text"] { flex: 1; min-width: 200px; }
