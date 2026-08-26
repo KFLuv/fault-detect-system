@@ -6,3 +6,9 @@ spring:
     name: fault-detect-system
   jackson:
     default-property-inclusion: always
+  web:
+    resources:
+      cache:
+        cachecontrol:
+          # 前端静态资源禁用缓存，避免浏览器加载旧版本页面
+          no-store: true

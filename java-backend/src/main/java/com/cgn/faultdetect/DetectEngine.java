@@ -26,6 +26,9 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -174,8 +177,9 @@ public class DetectEngine {
         long start = System.currentTimeMillis();
         try {
             // 禁用代理（内网直连），对应 Python 版 trust_env=False
+            // 连接阶段超时独立控制（min(timeout, 5s)），避免对丢包目标等待满整个超时
             HttpClient client = HttpClient.newBuilder()
-                    .connectTimeout(Duration.ofSeconds(timeoutSec))
+                    .connectTimeout(Duration.ofSeconds(Math.min(timeoutSec, 5)))
                     .followRedirects(HttpClient.Redirect.NEVER)
                     .proxy(ProxySelector.of(null))
                     .sslContext(trustAllSslContext())
@@ -316,9 +320,26 @@ public class DetectEngine {
         dr.steps.add(step(0, "URL 解析", "解析输入 URL", "ok",
                 parsed.scheme + "://" + parsed.host + ":" + parsed.port + parsed.path));
 
-        // 第 0 步：服务存活检测
+        // 第 0 步（服务存活检测）与第 1 步（HTTP 探测）并行执行：
+        // 两项检测互不依赖，串行时最坏等待 = TCP 超时(5s) + HTTP 超时(timeout)
+        // 并行后总耗时 = max(TCP, HTTP)，显著加快目标不可达/超时场景的检测
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        TcpResult service;
+        ProbeResult probe;
+        try {
+            CompletableFuture<TcpResult> tcpFuture = enableServiceCheck
+                    ? CompletableFuture.supplyAsync(() -> tcpCheck(parsed.host, parsed.port, 5), pool)
+                    : CompletableFuture.completedFuture(null);
+            CompletableFuture<ProbeResult> httpFuture =
+                    CompletableFuture.supplyAsync(() -> httpProbe(parsed.url, timeout), pool);
+            service = tcpFuture.join();
+            probe = httpFuture.join();
+        } finally {
+            pool.shutdownNow();
+        }
+
+        // 第 0 步步骤记录（保持 0 → 1 顺序展示）
         if (enableServiceCheck) {
-            TcpResult service = tcpCheck(parsed.host, parsed.port, 5);
             dr.service = service;
             dr.steps.add(step(0, "服务存活检测（TCP）",
                     "Test-NetConnection " + parsed.host + " -Port " + parsed.port,
@@ -334,7 +355,6 @@ public class DetectEngine {
         }
 
         // 第 1 步：HTTP 探测
-        ProbeResult probe = httpProbe(parsed.url, timeout);
         dr.probe = probe;
         dr.steps.add(step(1, "HTTP 请求探测", "GET " + parsed.url,
                 probe.statusCode != null ? "ok" : "fail",
@@ -371,11 +391,36 @@ public class DetectEngine {
                     "mysql -u root -p → SELECT * FROM 表名 LIMIT 10", "info",
                     "响应 data 为空数组 → 需验证数据库：表是否存在、是否有数据"));
         } else {
-            dr.steps.add(step(5, "Postman 隔离验证（区分前后端）",
-                    "复制 URL/Header/Body 到 Postman 复现", "info",
-                    "Postman 正常 + 页面异常 = 100% 前端问题；Postman 也报错 = 后端/网络问题"));
+            // 前后端隔离验证：系统已用裸请求（等价 Postman）自动完成，无需人工操作
+            dr.steps.add(step(5, "前后端隔离验证（自动完成）",
+                    "等价 Postman：绕过浏览器环境直连后端", "info",
+                    autoIsolation(probe, normalized, features)));
         }
         return dr;
+    }
+
+    /**
+     * 前后端隔离验证（系统自动完成，无需手动 Postman）：
+     * 第 1 步的裸请求已获取后端真实响应，据此直接判定问题归属。
+     */
+    private static String autoIsolation(ProbeResult probe, String normalized, List<String> features) {
+        if (probe.error != null && probe.error.contains("超时")) {
+            return "后端无响应（超时）→ 服务未启动 / 网络不通 / 防火墙拦截，直接排查服务与网络，无需手动验证";
+        }
+        if (probe.statusCode != null) {
+            int code = probe.statusCode;
+            if (code >= 500) {
+                return "后端可达但返回 " + code + " → 后端服务异常，直接查后端日志，无需手动验证";
+            }
+            if (code >= 400) {
+                return "后端可达但返回 " + code + " → 前端请求参数 / 权限问题，检查 F12 Payload 与 Token，无需手动验证";
+            }
+            if (features.contains("empty")) {
+                return "后端可达且返回 " + code + "，但数据为空 → 优先排查数据库（表是否存在 / 是否有数据）";
+            }
+            return "后端可达且响应正常（" + code + "）→ 若页面仍有异常，问题在前端渲染（系统已自动完成隔离验证）";
+        }
+        return "后端不可达 → 网络 / 服务 / 防火墙问题（系统已自动完成隔离验证，无需手动验证）";
     }
 
     private static String ms(Integer v) {

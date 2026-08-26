@@ -12,6 +12,11 @@ __pycache__/
 java-backend/target/
 *.class
 
+# ===== Node 依赖与前端构建产物（源码在 frontend-vue3/src，dist 可随时重新构建）=====
+node_modules/
+frontend-vue3/dist/
+frontend-vue3/node_modules/
+
 # ===== IDE 与系统杂项 =====
 .idea/
 .vscode/
