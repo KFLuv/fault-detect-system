@@ -1,0 +1,18 @@
+# 排除本地虚拟环境与缓存
+.venv
+node_modules
+__pycache__
+*.pyc
+*.pyo
+
+# 排除本地数据（容器内用 volume 持久化）
+backend/data
+
+# 排除杂项
+.git
+.gitignore
+*.md
+*.bat
+Dockerfile
+docker-compose.yml
+.dockerignore

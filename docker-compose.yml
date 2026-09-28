@@ -1,0 +1,14 @@
+# 故障检测系统 - Docker Compose
+# 使用：docker compose up -d   （Docker Desktop 中可直接运行）
+# 访问：http://localhost:8000
+services:
+  fault-detect-system:
+    build: .
+    image: fault-detect-system:latest
+    container_name: fault-detect-system
+    ports:
+      - "8000:8000"
+    volumes:
+      # 数据库 + 自定义场景持久化到宿主机 ./data 目录
+      - ./data:/app/data
+    restart: unless-stopped

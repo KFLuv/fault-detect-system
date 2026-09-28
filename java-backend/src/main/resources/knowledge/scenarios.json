@@ -1,0 +1,4160 @@
+{
+  "category_labels": {
+    "frontend": "前端问题",
+    "backend": "后端问题",
+    "database": "数据库问题",
+    "service": "服务问题",
+    "network": "网络问题",
+    "permission": "权限问题",
+    "performance": "性能问题",
+    "config": "配置问题",
+    "auth": "认证问题",
+    "business": "业务问题"
+  },
+  "category_colors": {
+    "frontend": "#ffd32a",
+    "backend": "#0984e3",
+    "database": "#1dd1a1",
+    "service": "#d63031",
+    "network": "#fdcb6e",
+    "permission": "#e84393",
+    "performance": "#636e72",
+    "config": "#8e44ad",
+    "auth": "#e17055",
+    "business": "#00b894"
+  },
+  "scenarios": [
+    {
+      "id": "SCN_001",
+      "name": "后端服务未启动",
+      "http_codes": [
+        "pending"
+      ],
+      "response_patterns": [
+        "no response",
+        "timeout",
+        "超时"
+      ],
+      "ui_symptoms": [
+        "转圈",
+        "无响应",
+        "打不开"
+      ],
+      "root_cause": "service",
+      "conclusion": "后端服务未启动（TCP 连接失败，请求未到达后端）",
+      "evidence": [
+        "第 0 步：Test-NetConnection {host} -Port {port} → TcpTestSucceeded: False",
+        "第 1 步：F12 Network → 请求 pending → 30 秒后超时（504）",
+        "进程检查：ps -ef | grep java → 无 SpringBoot 进程"
+      ],
+      "solution": [
+        "启动后端服务（java -jar app.jar / docker restart <容器>）",
+        "确认服务启动参数 --server.address=0.0.0.0（避免只监听 IPv6）",
+        "确认端口是否被占用：netstat -tlnp | grep {port}"
+      ],
+      "probability": 1.0,
+      "priority": "高"
+    },
+    {
+      "id": "SCN_002",
+      "name": "网络不通",
+      "http_codes": [
+        "pending"
+      ],
+      "response_patterns": [
+        "no response",
+        "network unreachable",
+        "connect"
+      ],
+      "ui_symptoms": [
+        "超时",
+        "无响应",
+        "页面打不开"
+      ],
+      "root_cause": "network",
+      "conclusion": "网络不通（IP/端口无法连通，请求未发出）",
+      "evidence": [
+        "第 0 步：Test-NetConnection {host} -Port {port} → 失败",
+        "ping {host} → 不通 或 丢包严重",
+        "确认客户端与服务端在同一网段/可路由"
+      ],
+      "solution": [
+        "检查客户端网络（能否 ping 通服务器）",
+        "检查 VPN/内网连接是否正常",
+        "联系网络管理员确认路由/防火墙放行"
+      ],
+      "probability": 0.95,
+      "priority": "高"
+    },
+    {
+      "id": "SCN_003",
+      "name": "防火墙拦截",
+      "http_codes": [
+        "pending"
+      ],
+      "response_patterns": [
+        "no response",
+        "blocked",
+        "拒绝"
+      ],
+      "ui_symptoms": [
+        "超时",
+        "无响应",
+        "特定 IP 无法访问"
+      ],
+      "root_cause": "network",
+      "conclusion": "防火墙/安全组拦截（端口未放行）",
+      "evidence": [
+        "第 0 步：telnet {host} {port} → 连接失败",
+        "防火墙状态：systemctl status firewalld → 开启",
+        "防火墙规则：firewall-cmd --list-all → 未见 {port} 端口"
+      ],
+      "solution": [
+        "开放端口：firewall-cmd --permanent --add-port={port}/tcp && firewall-cmd --reload",
+        "云服务器检查安全组入站规则是否放行 {port}"
+      ],
+      "probability": 0.95,
+      "priority": "高"
+    },
+    {
+      "id": "SCN_004",
+      "name": "数据库无数据",
+      "http_codes": [
+        "200"
+      ],
+      "response_patterns": [
+        "data",
+        "empty",
+        "\\[\\]",
+        "空",
+        "records",
+        "rows"
+      ],
+      "ui_symptoms": [
+        "空表格",
+        "空列表",
+        "无数据",
+        "查询无结果"
+      ],
+      "root_cause": "database",
+      "conclusion": "数据库无数据（后端接口正常，但查询结果为空）",
+      "evidence": [
+        "第 1 步：F12 Network → {url} → Status 200",
+        "响应体：{\"code\":200,\"message\":\"success\",\"data\":[]}",
+        "第 6 步：数据库 → SELECT * FROM 表名 LIMIT 10 → 0 rows"
+      ],
+      "solution": [
+        "检查数据库中是否有数据（mysql -u root -p → SELECT * FROM users LIMIT 10）",
+        "检查数据导入流程或重置测试数据",
+        "检查查询条件是否过于严格（误加过滤条件）"
+      ],
+      "probability": 1.0,
+      "priority": "高"
+    },
+    {
+      "id": "SCN_005",
+      "name": "前端渲染问题",
+      "http_codes": [
+        "200"
+      ],
+      "response_patterns": [
+        "data",
+        "数据"
+      ],
+      "ui_symptoms": [
+        "页面白屏",
+        "数据不显示",
+        "表格空白但有接口数据"
+      ],
+      "root_cause": "frontend",
+      "conclusion": "前端渲染问题（接口有数据，但页面不展示）",
+      "evidence": [
+        "第 1 步：F12 Network → {url} → Status 200，且 data 有值",
+        "Postman 复现 → 返回正常数据",
+        "F12 Console → 前端 JS 报错（渲染中断）"
+      ],
+      "solution": [
+        "查看 F12 Console 报错（Uncaught TypeError / ReferenceError）",
+        "检查前端循环渲染逻辑与数据字段名是否匹配",
+        "检查前端是否用错响应字段（如 data.list 写成 data.rows）"
+      ],
+      "probability": 0.95,
+      "priority": "高"
+    },
+    {
+      "id": "SCN_006",
+      "name": "CORS 跨域问题",
+      "http_codes": [
+        "200"
+      ],
+      "response_patterns": [
+        "cors",
+        "cross-origin",
+        "Access-Control"
+      ],
+      "ui_symptoms": [
+        "接口 200 但页面报跨域错误",
+        "控制台报 CORS"
+      ],
+      "root_cause": "backend",
+      "conclusion": "CORS 跨域配置问题（接口正常但浏览器拦截）",
+      "evidence": [
+        "F12 Console → Access to XMLHttpRequest at {url} ... blocked by CORS policy",
+        "Postman 直接调用 → 正常返回（Postman 不受跨域限制）",
+        "响应头缺少 Access-Control-Allow-Origin"
+      ],
+      "solution": [
+        "后端添加 CORS 配置（允许前端来源）",
+        "Nginx 层配置 add_header Access-Control-Allow-Origin *",
+        "前端代理转发（开发环境 vite proxy / devServer proxy）"
+      ],
+      "probability": 0.9,
+      "priority": "高"
+    },
+    {
+      "id": "SCN_007",
+      "name": "响应 JSON 解析失败",
+      "http_codes": [
+        "200"
+      ],
+      "response_patterns": [
+        "parse",
+        "json",
+        "unexpected"
+      ],
+      "ui_symptoms": [
+        "页面报 JSON 解析错误",
+        "数据区域空白"
+      ],
+      "root_cause": "backend",
+      "conclusion": "后端返回非标准 JSON（前端解析失败）",
+      "evidence": [
+        "F12 Network → {url} → Response 不是合法 JSON（如带 HTML 或 BOM）",
+        "响应体开头是 <!DOCTYPE html> 或包含异常字符"
+      ],
+      "solution": [
+        "后端接口返回格式与约定不符，联系后端修复",
+        "检查是否有网关/防火墙篡改响应体",
+        "前端做兼容处理（容错解析）"
+      ],
+      "probability": 0.85,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_008",
+      "name": "数据缓存旧数据",
+      "http_codes": [
+        "200"
+      ],
+      "response_patterns": [
+        "cache",
+        "304",
+        "etag",
+        "last-modified"
+      ],
+      "ui_symptoms": [
+        "数据不更新",
+        "改了但页面没变",
+        "刷新还是旧数据"
+      ],
+      "root_cause": "config",
+      "conclusion": "浏览器/网关缓存导致页面显示旧数据",
+      "evidence": [
+        "F12 Network → {url} → 命中缓存（from disk cache）",
+        "强制刷新（Ctrl+F5）后数据正常",
+        "响应头 Cache-Control / Expires 配置了强缓存"
+      ],
+      "solution": [
+        "后端响应头禁止强缓存（Cache-Control: no-cache）",
+        "接口 URL 加版本号/时间戳参数",
+        "前端请求加随机参数防缓存"
+      ],
+      "probability": 0.85,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_009",
+      "name": "接口响应慢但成功",
+      "http_codes": [
+        "200"
+      ],
+      "response_patterns": [
+        "slow",
+        "time"
+      ],
+      "ui_symptoms": [
+        "页面转圈很久才出来",
+        "接口 200 但耗时长"
+      ],
+      "root_cause": "performance",
+      "conclusion": "接口响应慢（200 但耗时过长，体验卡顿）",
+      "evidence": [
+        "F12 Network → {url} → 耗时 {time}ms（>2s）",
+        "后端日志查看该接口处理耗时",
+        "数据库 show processlist 检查是否有慢查询"
+      ],
+      "solution": [
+        "优化 SQL / 加索引",
+        "接口结果加缓存（Redis）",
+        "大数据量接口改分页/异步"
+      ],
+      "probability": 0.8,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_010",
+      "name": "字段名不匹配",
+      "http_codes": [
+        "200"
+      ],
+      "response_patterns": [
+        "data",
+        "字段",
+        "undefined"
+      ],
+      "ui_symptoms": [
+        "undefined",
+        "表格列显示 undefined",
+        "页面取值空白"
+      ],
+      "root_cause": "frontend",
+      "conclusion": "前后端字段名不一致（前端取不到数据）",
+      "evidence": [
+        "F12 Network → {url} → Response 字段为 createdAt",
+        "前端代码读取 createTime → undefined",
+        "页面表格列空白"
+      ],
+      "solution": [
+        "统一前后端字段命名（对照后端 DTO 字段）",
+        "前端按实际返回字段取值",
+        "后端按前端约定调整返回字段（加 @JsonProperty）"
+      ],
+      "probability": 0.85,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_011",
+      "name": "数据权限过滤",
+      "http_codes": [
+        "200"
+      ],
+      "response_patterns": [
+        "data",
+        "permission",
+        "auth"
+      ],
+      "ui_symptoms": [
+        "数据比预期少",
+        "某些用户看不到全部数据"
+      ],
+      "root_cause": "permission",
+      "conclusion": "数据权限过滤导致部分数据不可见（200 正常但被过滤）",
+      "evidence": [
+        "F12 Network → {url} → Status 200，data 数据量少于数据库实际数据",
+        "数据库全量查询 → 数据存在",
+        "当前用户角色存在数据权限范围限制"
+      ],
+      "solution": [
+        "检查用户角色的数据权限范围（部门/人员维度）",
+        "确认是否需要调整数据权限配置",
+        "如需全部数据，联系管理员调整角色权限"
+      ],
+      "probability": 0.8,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_012",
+      "name": "下载文件损坏",
+      "http_codes": [
+        "200"
+      ],
+      "response_patterns": [
+        "download",
+        "file",
+        "content-disposition"
+      ],
+      "ui_symptoms": [
+        "下载的压缩包/文件打不开",
+        "文件损坏"
+      ],
+      "root_cause": "backend",
+      "conclusion": "下载文件损坏（200 但文件内容异常）",
+      "evidence": [
+        "F12 Network → {url} → Status 200，Content-Type 为 application/octet-stream",
+        "文件大小与源文件不一致",
+        "下载后解压提示文件损坏"
+      ],
+      "solution": [
+        "后端下载接口正确设置 Content-Disposition 与 Content-Type",
+        "检查文件流是否正确关闭（Buffer flush/close）",
+        "前端下载使用 blob 并携带正确文件名"
+      ],
+      "probability": 0.8,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_013",
+      "name": "数据为空但表不存在",
+      "http_codes": [
+        "200"
+      ],
+      "response_patterns": [
+        "data",
+        "\\[\\]",
+        "empty",
+        "table",
+        "doesn't exist"
+      ],
+      "ui_symptoms": [
+        "查询报接口 200 但实际异常",
+        "日志提示表不存在"
+      ],
+      "root_cause": "database",
+      "conclusion": "数据库表不存在（接口 200 但后端日志报表缺失）",
+      "evidence": [
+        "响应体：{\"code\":200,\"message\":\"success\",\"data\":[]}",
+        "后端日志：Table 'xxx' doesn't exist",
+        "数据库 show tables → 未见对应表"
+      ],
+      "solution": [
+        "执行建表 SQL 或迁移脚本（migration）",
+        "检查是否缺少初始化 SQL",
+        "确认数据库连接指向正确的库（选错库常见）"
+      ],
+      "probability": 0.85,
+      "priority": "高"
+    },
+    {
+      "id": "SCN_014",
+      "name": "成功但无提示",
+      "http_codes": [
+        "201"
+      ],
+      "response_patterns": [
+        "success",
+        "created",
+        "成功"
+      ],
+      "ui_symptoms": [
+        "操作成功但页面无任何提示",
+        "不知道是否成功"
+      ],
+      "root_cause": "frontend",
+      "conclusion": "后端返回 201 成功，但前端未处理成功响应（体验问题）",
+      "evidence": [
+        "F12 Network → {url} → Status 201",
+        "响应体：{\"code\":201,\"message\":\"发布成功\"}",
+        "页面无任何成功/失败提示"
+      ],
+      "solution": [
+        "前端添加成功提示（Toast/Swal 提示）",
+        "成功后自动刷新列表或跳转页面",
+        "前端代码处理 201 成功分支"
+      ],
+      "probability": 1.0,
+      "priority": "高"
+    },
+    {
+      "id": "SCN_015",
+      "name": "创建成功但列表不刷新",
+      "http_codes": [
+        "201"
+      ],
+      "response_patterns": [
+        "created",
+        "success",
+        "成功"
+      ],
+      "ui_symptoms": [
+        "新增成功但列表看不到新数据",
+        "需要手动刷新才能看到"
+      ],
+      "root_cause": "frontend",
+      "conclusion": "创建成功但前端未刷新列表",
+      "evidence": [
+        "F12 Network → 创建接口 → 201 成功",
+        "列表查询接口 → 数据库已有新数据",
+        "前端未在创建成功后重新查询列表"
+      ],
+      "solution": [
+        "前端在 201 后重新调用列表接口刷新",
+        "创建成功后跳转到列表页/详情页",
+        "使用事件总线或状态管理统一刷新"
+      ],
+      "probability": 0.9,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_016",
+      "name": "创建成功但跳转错误",
+      "http_codes": [
+        "201"
+      ],
+      "response_patterns": [
+        "created",
+        "redirect",
+        "跳转"
+      ],
+      "ui_symptoms": [
+        "创建成功但跳到错误页面",
+        "跳转后 404"
+      ],
+      "root_cause": "frontend",
+      "conclusion": "创建成功但前端跳转路由错误",
+      "evidence": [
+        "F12 Network → 创建接口 → 201 成功",
+        "页面跳转到不存在的路由 → 404/白屏",
+        "前端代码跳转路径写错（如 /edit 写成 /update）"
+      ],
+      "solution": [
+        "修正前端跳转路由",
+        "确认路由表中有对应页面配置",
+        "详情页参数传递错误（漏传 id）"
+      ],
+      "probability": 0.85,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_017",
+      "name": "异步任务无状态展示",
+      "http_codes": [
+        "202"
+      ],
+      "response_patterns": [
+        "accepted",
+        "async",
+        "task",
+        "job"
+      ],
+      "ui_symptoms": [
+        "提交后一直转圈",
+        "不知道任务进行到哪一步"
+      ],
+      "root_cause": "frontend",
+      "conclusion": "异步任务提交成功但前端无进度展示",
+      "evidence": [
+        "F12 Network → {url} → Status 202 Accepted",
+        "响应体：{\"code\":202,\"message\":\"任务已提交\",\"taskId\":\"xxx\"}",
+        "前端未轮询任务状态接口"
+      ],
+      "solution": [
+        "前端轮询任务状态接口（GET /api/tasks/{id}）",
+        "增加任务进度条/状态展示",
+        "任务完成时给用户明确反馈"
+      ],
+      "probability": 0.85,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_018",
+      "name": "任务失败无反馈",
+      "http_codes": [
+        "202"
+      ],
+      "response_patterns": [
+        "failed",
+        "error",
+        "task"
+      ],
+      "ui_symptoms": [
+        "任务提交后最后失败但页面无提示",
+        "后台任务静默失败"
+      ],
+      "root_cause": "backend",
+      "conclusion": "异步任务执行失败但未通知用户",
+      "evidence": [
+        "F12 Network → {url} → 202 提交成功",
+        "任务状态接口 → failed",
+        "后端日志：任务执行异常堆栈"
+      ],
+      "solution": [
+        "后端任务失败时记录日志并通知前端",
+        "增加任务失败重试机制",
+        "前端展示失败原因并支持重新提交"
+      ],
+      "probability": 0.8,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_019",
+      "name": "成功但前端误判失败",
+      "http_codes": [
+        "204"
+      ],
+      "response_patterns": [
+        "204",
+        "no content"
+      ],
+      "ui_symptoms": [
+        "操作成功但页面提示失败",
+        "接口 204 前端走失败分支"
+      ],
+      "root_cause": "frontend",
+      "conclusion": "后端返回 204（无内容）但前端误判为失败",
+      "evidence": [
+        "F12 Network → {url} → Status 204 No Content",
+        "后端正常处理（删除/更新成功）",
+        "前端代码只判断 data/body，未处理 204 成功分支"
+      ],
+      "solution": [
+        "前端将 204 视为成功（res.status === 204）",
+        "统一 axios 拦截器处理 204",
+        "后端返回 200 代替 204（约定化）"
+      ],
+      "probability": 0.9,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_020",
+      "name": "成功无内容无提示",
+      "http_codes": [
+        "204"
+      ],
+      "response_patterns": [
+        "no content",
+        "204"
+      ],
+      "ui_symptoms": [
+        "操作成功但用户完全无感知",
+        "无任何提示"
+      ],
+      "root_cause": "frontend",
+      "conclusion": "后端 204 成功且前端无任何反馈",
+      "evidence": [
+        "F12 Network → {url} → Status 204",
+        "页面无任何提示（成功/失败都没有）",
+        "用户无法确认操作是否生效"
+      ],
+      "solution": [
+        "前端加成功提示（toast）",
+        "204 场景需要刷新列表给用户确认",
+        "增加操作日志供用户查看"
+      ],
+      "probability": 0.85,
+      "priority": "低"
+    },
+    {
+      "id": "SCN_021",
+      "name": "多选项未处理",
+      "http_codes": [
+        "300"
+      ],
+      "response_patterns": [
+        "multiple",
+        "300"
+      ],
+      "ui_symptoms": [
+        "请求返回多个结果但页面报错",
+        "接口 300 未处理"
+      ],
+      "root_cause": "config",
+      "conclusion": "服务器返回多选项（300）但前后端未处理",
+      "evidence": [
+        "F12 Network → {url} → Status 300 Multiple Choices",
+        "响应体包含多个可选地址",
+        "前端未处理 300 分支"
+      ],
+      "solution": [
+        "确认服务端为何返回多选项（多为配置）",
+        "前端处理 300 分支（展示选择）",
+        "后端明确单一响应（返回 200/302）"
+      ],
+      "probability": 0.8,
+      "priority": "低"
+    },
+    {
+      "id": "SCN_022",
+      "name": "URL 永久变更未更新",
+      "http_codes": [
+        "301"
+      ],
+      "response_patterns": [
+        "301",
+        "moved",
+        "redirect"
+      ],
+      "ui_symptoms": [
+        "接口/页面被重定向",
+        "旧地址自动跳转新地址"
+      ],
+      "root_cause": "frontend",
+      "conclusion": "资源永久迁移，前端仍在调用旧 URL",
+      "evidence": [
+        "F12 Network → {url} → Status 301 Moved Permanently",
+        "Location 头指向新地址",
+        "前端代码/收藏夹仍是旧地址"
+      ],
+      "solution": [
+        "更新前端 API 地址为新 URL",
+        "更新书签/快捷方式",
+        "后端保留旧地址 301 跳转（过渡期）"
+      ],
+      "probability": 0.95,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_023",
+      "name": "旧链接未加跳转",
+      "http_codes": [
+        "301"
+      ],
+      "response_patterns": [
+        "301",
+        "moved"
+      ],
+      "ui_symptoms": [
+        "老用户访问旧链接打不开",
+        "旧地址未跳转到新地址"
+      ],
+      "root_cause": "config",
+      "conclusion": "资源已迁移但旧地址未配置重定向",
+      "evidence": [
+        "F12 Network → 旧地址 → Status 404（未配置跳转）",
+        "对比新地址 → 正常 200",
+        "服务器/网关未配置旧地址 301 规则"
+      ],
+      "solution": [
+        "在 Nginx/网关配置旧地址 301 到新地址",
+        "或后端 Controller 保留旧路由做重定向",
+        "通知用户更新访问地址"
+      ],
+      "probability": 0.85,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_024",
+      "name": "登录重定向死循环",
+      "http_codes": [
+        "302"
+      ],
+      "response_patterns": [
+        "302",
+        "redirect",
+        "loop"
+      ],
+      "ui_symptoms": [
+        "登录后一直跳转刷不出页面",
+        "浏览器提示重定向过多"
+      ],
+      "root_cause": "backend",
+      "conclusion": "登录后重定向死循环（302 循环跳转）",
+      "evidence": [
+        "F12 Network → 多个 302 连续跳转",
+        "浏览器提示 ERR_TOO_MANY_REDIRECTS",
+        "登录成功但每次请求又被重定向到登录页"
+      ],
+      "solution": [
+        "检查登录成功后 Cookie/Token 是否正确种入",
+        "检查权限拦截器是否对登录接口也拦截",
+        "确认前端路由守卫与后端重定向逻辑不冲突"
+      ],
+      "probability": 0.95,
+      "priority": "高"
+    },
+    {
+      "id": "SCN_025",
+      "name": "重定向丢失 Token",
+      "http_codes": [
+        "302"
+      ],
+      "response_patterns": [
+        "302",
+        "redirect",
+        "token"
+      ],
+      "ui_symptoms": [
+        "跳转后提示未登录",
+        "重定向后 Token 丢失"
+      ],
+      "root_cause": "backend",
+      "conclusion": "重定向后丢失登录凭证（Token/Cookie 未带）",
+      "evidence": [
+        "F12 Network → 302 跳转后的请求 → 401",
+        "跳转请求未携带 Authorization / Cookie",
+        "跨域跳转导致 Cookie 丢失（SameSite 策略）"
+      ],
+      "solution": [
+        "确认重定向目标是否同一域名（跨域需配置 CORS + Cookie）",
+        "检查 SameSite=None; Secure 配置",
+        "前端请求拦截器统一携带 Token"
+      ],
+      "probability": 0.85,
+      "priority": "高"
+    },
+    {
+      "id": "SCN_026",
+      "name": "重定向到错误页面",
+      "http_codes": [
+        "302"
+      ],
+      "response_patterns": [
+        "302",
+        "redirect",
+        "location"
+      ],
+      "ui_symptoms": [
+        "跳转到了不存在的页面",
+        "跳转后 404/白屏"
+      ],
+      "root_cause": "frontend",
+      "conclusion": "重定向目标地址错误",
+      "evidence": [
+        "F12 Network → {url} → 302 → Location 指向错误地址",
+        "目标地址访问 → 404",
+        "前端/后端重定向 URL 配置错误"
+      ],
+      "solution": [
+        "修正重定向目标 URL",
+        "检查 Nginx rewrite / proxy 配置",
+        "后端 redirect 地址与前端路由保持一致"
+      ],
+      "probability": 0.9,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_027",
+      "name": "提交后未跳转结果页",
+      "http_codes": [
+        "303"
+      ],
+      "response_patterns": [
+        "303",
+        "see other"
+      ],
+      "ui_symptoms": [
+        "表单提交后页面无变化",
+        "提交后应跳转结果页未跳转"
+      ],
+      "root_cause": "frontend",
+      "conclusion": "POST 提交后 303 重定向但前端未跟随",
+      "evidence": [
+        "F12 Network → 提交接口 → Status 303 See Other",
+        "Location 指向结果页",
+        "前端未跟随重定向/未处理 303"
+      ],
+      "solution": [
+        "前端 fetch 默认跟随重定向，检查是否关闭（redirect: 'manual'）",
+        "若手动处理重定向，跳转 Location 指向的页面",
+        "后端确认 303 目标地址正确"
+      ],
+      "probability": 0.85,
+      "priority": "低"
+    },
+    {
+      "id": "SCN_028",
+      "name": "缓存导致数据不更新",
+      "http_codes": [
+        "304"
+      ],
+      "response_patterns": [
+        "304",
+        "not modified",
+        "cache"
+      ],
+      "ui_symptoms": [
+        "数据不更新",
+        "接口一直 304",
+        "改了数据页面不变"
+      ],
+      "root_cause": "config",
+      "conclusion": "浏览器缓存（304）导致数据不更新",
+      "evidence": [
+        "F12 Network → {url} → Status 304 Not Modified",
+        "强缓存命中（from disk cache）",
+        "强制刷新后数据正常"
+      ],
+      "solution": [
+        "响应头去除强缓存（Cache-Control: no-cache / max-age=0）",
+        "GET 请求带版本参数防缓存",
+        "Nginx 关闭敏感接口缓存"
+      ],
+      "probability": 0.9,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_029",
+      "name": "ETag 校验导致响应异常",
+      "http_codes": [
+        "304"
+      ],
+      "response_patterns": [
+        "304",
+        "etag",
+        "not modified"
+      ],
+      "ui_symptoms": [
+        "接口返回 304 导致前端拿不到数据",
+        "条件请求异常"
+      ],
+      "root_cause": "config",
+      "conclusion": "ETag/Last-Modified 校验导致返回 304 而非 200",
+      "evidence": [
+        "F12 Network → {url} → 带 If-None-Match → 返回 304",
+        "前端期望每次拿到最新数据",
+        "缓存校验逻辑正常但业务上不需要"
+      ],
+      "solution": [
+        "动态接口关闭 ETag 校验或让响应体变化",
+        "前端加时间戳参数绕过缓存",
+        "后端正确设置 Cache-Control"
+      ],
+      "probability": 0.8,
+      "priority": "低"
+    },
+    {
+      "id": "SCN_030",
+      "name": "网关路由配置错误",
+      "http_codes": [
+        "307"
+      ],
+      "response_patterns": [
+        "307",
+        "temporary redirect"
+      ],
+      "ui_symptoms": [
+        "接口被重定向到错误服务",
+        "307 跳转异常"
+      ],
+      "root_cause": "config",
+      "conclusion": "网关/路由 307 重定向配置错误",
+      "evidence": [
+        "F12 Network → {url} → Status 307 Temporary Redirect",
+        "Location 指向错误的服务/端口",
+        "网关路由规则配置问题"
+      ],
+      "solution": [
+        "检查 Nginx/网关路由配置（proxy_pass 目标）",
+        "确认多环境（测试/生产）配置是否串了",
+        "负载均衡权重/节点配置检查"
+      ],
+      "probability": 0.85,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_031",
+      "name": "永久重定向规则错误",
+      "http_codes": [
+        "308"
+      ],
+      "response_patterns": [
+        "308",
+        "permanent redirect"
+      ],
+      "ui_symptoms": [
+        "功能被错误重定向到新地址",
+        "旧功能不可用"
+      ],
+      "root_cause": "config",
+      "conclusion": "308 永久重定向规则配置错误",
+      "evidence": [
+        "F12 Network → {url} → Status 308",
+        "Location 指向的地址无对应功能",
+        "网关重定向规则写错"
+      ],
+      "solution": [
+        "修正重定向规则目标地址",
+        "确认新旧地址功能一致性",
+        "浏览器可能缓存 308（需清理或换浏览器验证）"
+      ],
+      "probability": 0.85,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_032",
+      "name": "参数缺失",
+      "http_codes": [
+        "400"
+      ],
+      "response_patterns": [
+        "required",
+        "missing",
+        "参数",
+        "不能为空",
+        "必填"
+      ],
+      "ui_symptoms": [
+        "提交提示参数缺失",
+        "必填项没填就提交"
+      ],
+      "root_cause": "frontend",
+      "conclusion": "请求参数缺失（前端未校验必填项）",
+      "evidence": [
+        "F12 Network → {url} → Status 400",
+        "响应体：{\"code\":400,\"message\":\"xxx 不能为空\"}",
+        "Payload 中缺少必填字段"
+      ],
+      "solution": [
+        "前端表单增加必填校验（提交前拦截）",
+        "检查提交参数是否正确组装",
+        "后端错误提示返回具体字段名"
+      ],
+      "probability": 0.95,
+      "priority": "高"
+    },
+    {
+      "id": "SCN_033",
+      "name": "参数格式错误",
+      "http_codes": [
+        "400"
+      ],
+      "response_patterns": [
+        "format",
+        "格式",
+        "invalid",
+        "不正确"
+      ],
+      "ui_symptoms": [
+        "提示邮箱/手机号格式错误",
+        "格式校验不过"
+      ],
+      "root_cause": "frontend",
+      "conclusion": "参数格式错误（前端未做格式校验）",
+      "evidence": [
+        "F12 Network → {url} → Status 400",
+        "响应体：{\"code\":400,\"message\":\"邮箱格式不正确\"}",
+        "Payload：email=\"invalid-email\"（缺少 @ 和域名）"
+      ],
+      "solution": [
+        "前端增加正则校验（邮箱/手机号/身份证等）",
+        "输入框加格式化提示",
+        "后端返回更详细的校验错误"
+      ],
+      "probability": 0.95,
+      "priority": "高"
+    },
+    {
+      "id": "SCN_034",
+      "name": "参数类型错误",
+      "http_codes": [
+        "400"
+      ],
+      "response_patterns": [
+        "type",
+        "类型",
+        "cannot",
+        "convert"
+      ],
+      "ui_symptoms": [
+        "提交报参数类型错误",
+        "数字字段传了字符串"
+      ],
+      "root_cause": "frontend",
+      "conclusion": "参数类型错误（前后端类型不匹配）",
+      "evidence": [
+        "F12 Network → {url} → Status 400",
+        "Payload 中 id 传了字符串 \"123\"，后端期望数字",
+        "响应体：Failed to convert value of type 'String' to required type 'Long'"
+      ],
+      "solution": [
+        "前端按后端类型传参（数字字段传 number）",
+        "检查 JSON.stringify 后类型是否变化",
+        "后端参数转换失败给明确提示"
+      ],
+      "probability": 0.9,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_035",
+      "name": "参数超长",
+      "http_codes": [
+        "400"
+      ],
+      "response_patterns": [
+        "too long",
+        "length",
+        "超长",
+        "长度"
+      ],
+      "ui_symptoms": [
+        "提交长文本报参数错误",
+        "字段长度超限"
+      ],
+      "root_cause": "config",
+      "conclusion": "参数超过后端长度限制",
+      "evidence": [
+        "F12 Network → {url} → Status 400",
+        "响应体：字段长度超限（如 max 255）",
+        "数据库字段 varchar(255) 限制"
+      ],
+      "solution": [
+        "前端限制输入长度",
+        "后端放宽字段长度或分页/截断处理",
+        "数据库字段类型与 DTO 校验一致"
+      ],
+      "probability": 0.85,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_036",
+      "name": "未登录/Token 失效",
+      "http_codes": [
+        "401"
+      ],
+      "response_patterns": [
+        "未登录",
+        "token",
+        "unauthorized",
+        "401",
+        "请先登录"
+      ],
+      "ui_symptoms": [
+        "提示未登录",
+        "Token 失效",
+        "操作被拒绝"
+      ],
+      "root_cause": "auth",
+      "conclusion": "前端未登录/Token 失效（认证问题）",
+      "evidence": [
+        "第 1 步：F12 Network → {url} → Status 401",
+        "响应体：{\"code\":401,\"message\":\"未登录或 Token 失效，请先登录\"}",
+        "请求 Headers 缺少 Authorization: Bearer <token>"
+      ],
+      "solution": [
+        "实现登录功能，保存 Token 到 localStorage",
+        "请求拦截器统一携带 Authorization 头",
+        "Token 过期后跳转登录页重新登录"
+      ],
+      "probability": 1.0,
+      "priority": "高"
+    },
+    {
+      "id": "SCN_037",
+      "name": "Token 过期",
+      "http_codes": [
+        "401"
+      ],
+      "response_patterns": [
+        "token",
+        "expired",
+        "过期",
+        "401"
+      ],
+      "ui_symptoms": [
+        "用了一段时间后提示登录",
+        "Token 过期失效"
+      ],
+      "root_cause": "auth",
+      "conclusion": "Token 已过期（登录状态丢失）",
+      "evidence": [
+        "F12 Network → {url} → Status 401",
+        "响应体：{\"code\":401,\"message\":\"Token 已过期\"}",
+        "Token 创建时间距今超过过期时间"
+      ],
+      "solution": [
+        "引导用户重新登录",
+        "前端实现 Token 刷新机制（refresh token）",
+        "检查后端 Token 过期时间配置是否过短"
+      ],
+      "probability": 0.95,
+      "priority": "高"
+    },
+    {
+      "id": "SCN_038",
+      "name": "Token 格式错误",
+      "http_codes": [
+        "401"
+      ],
+      "response_patterns": [
+        "token",
+        "invalid",
+        "格式"
+      ],
+      "ui_symptoms": [
+        "接口一直 401 但已登录",
+        "Token 携带方式不对"
+      ],
+      "root_cause": "auth",
+      "conclusion": "Token 格式错误（携带方式/前缀不对）",
+      "evidence": [
+        "F12 Network → {url} → Status 401",
+        "请求头 Authorization 缺少 Bearer 前缀",
+        "或 Token 值本身格式错误"
+      ],
+      "solution": [
+        "前端拼接 Authorization: Bearer ${token}",
+        "检查登录接口是否返回完整 Token",
+        "检查是否有 Token 被截断（换行/空格）"
+      ],
+      "probability": 0.9,
+      "priority": "高"
+    },
+    {
+      "id": "SCN_039",
+      "name": "登录接口调用失败",
+      "http_codes": [
+        "401"
+      ],
+      "response_patterns": [
+        "login",
+        "auth",
+        "failed"
+      ],
+      "ui_symptoms": [
+        "登录就报错",
+        "输入正确账号密码也登不上"
+      ],
+      "root_cause": "auth",
+      "conclusion": "登录接口认证失败（账号密码/接口问题）",
+      "evidence": [
+        "F12 Network → 登录接口 → Status 401 / Auth failed",
+        "Postman 调登录接口 → 也失败",
+        "后端日志：登录认证失败记录"
+      ],
+      "solution": [
+        "确认账号密码是否正确/是否被锁定",
+        "检查认证服务（如统一认证/SSO）是否正常",
+        "后端日志查看具体失败原因"
+      ],
+      "probability": 0.9,
+      "priority": "高"
+    },
+    {
+      "id": "SCN_040",
+      "name": "付费功能未开通",
+      "http_codes": [
+        "402"
+      ],
+      "response_patterns": [
+        "402",
+        "payment",
+        "开通",
+        "授权"
+      ],
+      "ui_symptoms": [
+        "提示需要开通功能",
+        "提示授权过期"
+      ],
+      "root_cause": "business",
+      "conclusion": "业务功能未开通/授权过期（402）",
+      "evidence": [
+        "F12 Network → {url} → Status 402 Payment Required",
+        "响应体：该功能需要开通/授权",
+        "License/授权配置检查"
+      ],
+      "solution": [
+        "联系厂商开通对应功能模块",
+        "检查 License/授权文件是否过期",
+        "确认功能授权与当前环境匹配"
+      ],
+      "probability": 0.9,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_041",
+      "name": "用户权限不足",
+      "http_codes": [
+        "403"
+      ],
+      "response_patterns": [
+        "403",
+        "权限不足",
+        "forbidden",
+        "无权限"
+      ],
+      "ui_symptoms": [
+        "提示权限不足",
+        "普通用户访问管理员功能"
+      ],
+      "root_cause": "permission",
+      "conclusion": "用户权限不足（RBAC 配置问题）",
+      "evidence": [
+        "第 1 步：F12 Network → {url} → Status 403",
+        "响应体：{\"code\":403,\"message\":\"权限不足\"}",
+        "当前用户角色：USER，访问的功能需要 ADMIN"
+      ],
+      "solution": [
+        "联系管理员为用户分配对应权限",
+        "检查 RBAC 角色-权限映射配置",
+        "确认用户角色是否与功能匹配"
+      ],
+      "probability": 1.0,
+      "priority": "高"
+    },
+    {
+      "id": "SCN_042",
+      "name": "RBAC 配置错误",
+      "http_codes": [
+        "403"
+      ],
+      "response_patterns": [
+        "403",
+        "rbac",
+        "role",
+        "权限"
+      ],
+      "ui_symptoms": [
+        "有权限的角色也访问不了",
+        "权限配置混乱"
+      ],
+      "root_cause": "permission",
+      "conclusion": "RBAC 权限配置错误（角色权限映射问题）",
+      "evidence": [
+        "F12 Network → {url} → Status 403",
+        "数据库角色-权限表数据异常",
+        "新加的角色未绑定菜单/接口权限"
+      ],
+      "solution": [
+        "检查角色权限绑定数据（角色-菜单-接口）",
+        "重新绑定角色权限并刷新缓存",
+        "确认权限缓存是否需要清理（Redis）"
+      ],
+      "probability": 0.9,
+      "priority": "高"
+    },
+    {
+      "id": "SCN_043",
+      "name": "IP 被限制",
+      "http_codes": [
+        "403"
+      ],
+      "response_patterns": [
+        "403",
+        "ip",
+        "denied",
+        "blacklist"
+      ],
+      "ui_symptoms": [
+        "特定 IP 无法访问",
+        "换 IP 就能访问"
+      ],
+      "root_cause": "network",
+      "conclusion": "IP 被加入黑名单/白名单限制",
+      "evidence": [
+        "F12 Network → {url} → Status 403",
+        "服务器/防火墙有 IP 白名单规则",
+        "当前出口 IP 不在白名单"
+      ],
+      "solution": [
+        "将当前 IP 加入访问白名单",
+        "检查防火墙/安全组 IP 限制规则",
+        "确认是否需要通过 VPN 访问"
+      ],
+      "probability": 0.9,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_044",
+      "name": "菜单隐藏但接口可调",
+      "http_codes": [
+        "403"
+      ],
+      "response_patterns": [
+        "403",
+        "menu",
+        "button",
+        "隐藏"
+      ],
+      "ui_symptoms": [
+        "菜单没显示但接口有权限",
+        "按钮不显示但仍能调用"
+      ],
+      "root_cause": "config",
+      "conclusion": "前端菜单/按钮权限与后端接口权限不一致",
+      "evidence": [
+        "F12 Network → {url} → Status 403",
+        "前端菜单已隐藏，但用户仍可调用该接口",
+        "后端接口权限未配置"
+      ],
+      "solution": [
+        "后端接口配置权限注解（@PreAuthorize 等）",
+        "统一前后端权限配置（菜单-接口映射）",
+        "权限变更后同步刷新缓存"
+      ],
+      "probability": 0.85,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_045",
+      "name": "前端路径错误",
+      "http_codes": [
+        "404"
+      ],
+      "response_patterns": [
+        "404",
+        "接口不存在",
+        "not found",
+        "路径"
+      ],
+      "ui_symptoms": [
+        "提示接口不存在",
+        "点击按钮报 404"
+      ],
+      "root_cause": "frontend",
+      "conclusion": "前端 URL 写错（后端有接口但路径不对）",
+      "evidence": [
+        "第 1 步：F12 Network → {url} → Status 404",
+        "请求路径：/api/config，实际应为 /api/system/config",
+        "响应体：{\"code\":404,\"message\":\"接口不存在\"}"
+      ],
+      "solution": [
+        "修正前端 API 路径（对照后端 Controller @RequestMapping）",
+        "用 Postman 验证正确路径返回 200",
+        "检查接口前缀（context-path）配置"
+      ],
+      "probability": 1.0,
+      "priority": "高"
+    },
+    {
+      "id": "SCN_046",
+      "name": "后端接口未开发",
+      "http_codes": [
+        "404"
+      ],
+      "response_patterns": [
+        "404",
+        "not found"
+      ],
+      "ui_symptoms": [
+        "页面调用接口报 404",
+        "Postman 所有路径都 404"
+      ],
+      "root_cause": "backend",
+      "conclusion": "后端接口尚未开发（所有路径均 404）",
+      "evidence": [
+        "第 1 步：F12 Network → {url} → Status 404",
+        "Postman 尝试所有可能路径 → 均 404",
+        "后端 Controller 中无对应接口"
+      ],
+      "solution": [
+        "确认该接口是否在开发计划中（联系后端）",
+        "如果已开发，检查是否部署到当前环境",
+        "前端对未开发功能做隐藏/降级处理"
+      ],
+      "probability": 0.95,
+      "priority": "高"
+    },
+    {
+      "id": "SCN_047",
+      "name": "接口被删除/改名",
+      "http_codes": [
+        "404"
+      ],
+      "response_patterns": [
+        "404",
+        "removed",
+        "改名"
+      ],
+      "ui_symptoms": [
+        "之前能用现在 404",
+        "接口被下线"
+      ],
+      "root_cause": "backend",
+      "conclusion": "接口被删除或改名（未通知前端）",
+      "evidence": [
+        "F12 Network → {url} → Status 404",
+        "版本升级后接口路径变更",
+        "后端代码中该接口已移除/改名"
+      ],
+      "solution": [
+        "联系后端确认接口变更记录",
+        "前端同步更新为新接口",
+        "后端对旧接口做兼容转发（过渡期）"
+      ],
+      "probability": 0.9,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_048",
+      "name": "静态资源 404",
+      "http_codes": [
+        "404"
+      ],
+      "response_patterns": [
+        "404",
+        ".js",
+        ".css",
+        ".png",
+        "静态"
+      ],
+      "ui_symptoms": [
+        "页面样式丢失/图标不显示",
+        "控制台报资源 404"
+      ],
+      "root_cause": "config",
+      "conclusion": "静态资源路径错误（js/css/图片 404）",
+      "evidence": [
+        "F12 Network → 静态资源 → Status 404",
+        "资源路径带错前缀或版本号错误",
+        "前端构建后资源路径配置（base/publicPath）错误"
+      ],
+      "solution": [
+        "检查前端构建配置 publicPath/base",
+        "Nginx location 静态资源路径配置",
+        "确认资源文件是否被打包部署"
+      ],
+      "probability": 0.9,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_049",
+      "name": "请求方法用错",
+      "http_codes": [
+        "405"
+      ],
+      "response_patterns": [
+        "405",
+        "method not allowed",
+        "请求方法"
+      ],
+      "ui_symptoms": [
+        "接口报 405",
+        "GET 写成 POST 或用反"
+      ],
+      "root_cause": "backend",
+      "conclusion": "请求方法错误（前端传错 GET/POST/PUT/DELETE）",
+      "evidence": [
+        "F12 Network → {url} → Status 405",
+        "后端接口是 POST，前端用了 GET",
+        "响应体：Request method 'GET' not supported"
+      ],
+      "solution": [
+        "前端修正请求方法（对照后端 @PostMapping/@GetMapping）",
+        "检查 axios/fetch 方法配置",
+        "后端对不支持的请求方法返回明确提示"
+      ],
+      "probability": 0.95,
+      "priority": "高"
+    },
+    {
+      "id": "SCN_050",
+      "name": "方法未实现",
+      "http_codes": [
+        "405"
+      ],
+      "response_patterns": [
+        "405",
+        "not implemented",
+        "不支持"
+      ],
+      "ui_symptoms": [
+        "接口 405 且确认方法没错",
+        "后端未实现该方法"
+      ],
+      "root_cause": "backend",
+      "conclusion": "后端未实现该请求方法",
+      "evidence": [
+        "F12 Network → {url} → Status 405",
+        "方法正确但后端 Controller 未定义该方法映射",
+        "Swagger/接口文档中无该方法"
+      ],
+      "solution": [
+        "后端补充对应方法映射（如 PUT 未实现）",
+        "前端改用后端已实现的方法",
+        "确认接口文档与实现一致"
+      ],
+      "probability": 0.9,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_051",
+      "name": "跨域预检请求 405",
+      "http_codes": [
+        "405"
+      ],
+      "response_patterns": [
+        "405",
+        "options",
+        "preflight",
+        "cors"
+      ],
+      "ui_symptoms": [
+        "跨域接口报 405",
+        "OPTIONS 预检失败"
+      ],
+      "root_cause": "config",
+      "conclusion": "跨域预检（OPTIONS）请求被拒绝 405",
+      "evidence": [
+        "F12 Network → OPTIONS {url} → Status 405",
+        "后端未处理 OPTIONS 预检请求",
+        "CORS 配置缺失导致预检失败"
+      ],
+      "solution": [
+        "后端配置 CORS 允许 OPTIONS 预检",
+        "Nginx 层面处理 OPTIONS 请求",
+        "网关统一添加 CORS 响应头"
+      ],
+      "probability": 0.9,
+      "priority": "高"
+    },
+    {
+      "id": "SCN_052",
+      "name": "Accept 头不匹配",
+      "http_codes": [
+        "406"
+      ],
+      "response_patterns": [
+        "406",
+        "not acceptable",
+        "accept"
+      ],
+      "ui_symptoms": [
+        "接口报 406",
+        "Accept 头要求格式后端不支持"
+      ],
+      "root_cause": "config",
+      "conclusion": "Accept 请求头与后端响应格式不匹配",
+      "evidence": [
+        "F12 Network → {url} → Status 406",
+        "请求头 Accept: application/xml，后端只返回 JSON",
+        "响应体：Not Acceptable"
+      ],
+      "solution": [
+        "前端 Accept 头改为 application/json",
+        "后端配置内容协商支持 JSON/XML",
+        "检查是否有全局响应格式转换器冲突"
+      ],
+      "probability": 0.9,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_053",
+      "name": "响应格式不受支持",
+      "http_codes": [
+        "406"
+      ],
+      "response_patterns": [
+        "406",
+        "format",
+        "格式"
+      ],
+      "ui_symptoms": [
+        "页面要求某种格式后端不支持",
+        "406 与响应格式相关"
+      ],
+      "root_cause": "backend",
+      "conclusion": "响应格式不受支持（内容协商失败）",
+      "evidence": [
+        "F12 Network → {url} → Status 406",
+        "请求头与响应头格式不一致",
+        "后端无对应 MessageConverter"
+      ],
+      "solution": [
+        "后端添加对应格式的转换器（如 XML 转 JSON）",
+        "前端明确请求格式",
+        "统一约定接口返回 JSON"
+      ],
+      "probability": 0.8,
+      "priority": "低"
+    },
+    {
+      "id": "SCN_054",
+      "name": "网络延迟高",
+      "http_codes": [
+        "408"
+      ],
+      "response_patterns": [
+        "408",
+        "timeout",
+        "慢"
+      ],
+      "ui_symptoms": [
+        "接口请求超时",
+        "网络慢导致 408"
+      ],
+      "root_cause": "network",
+      "conclusion": "网络延迟过高导致请求超时（408）",
+      "evidence": [
+        "F12 Network → {url} → Status 408",
+        "响应时间接近超时阈值",
+        "ping 服务器延迟高/丢包"
+      ],
+      "solution": [
+        "优化网络链路（VPN/专线）",
+        "前端增大超时时间",
+        "接口数据压缩传输（gzip）"
+      ],
+      "probability": 0.85,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_055",
+      "name": "后端处理超时",
+      "http_codes": [
+        "408"
+      ],
+      "response_patterns": [
+        "408",
+        "timeout",
+        "处理慢"
+      ],
+      "ui_symptoms": [
+        "接口 408 但网络正常",
+        "后端处理太慢"
+      ],
+      "root_cause": "backend",
+      "conclusion": "后端处理超时（客户端超时设置过短或后端慢）",
+      "evidence": [
+        "F12 Network → {url} → Status 408",
+        "网络正常但接口处理超过前端超时时间",
+        "后端日志该接口耗时过长"
+      ],
+      "solution": [
+        "前端增大请求超时时间",
+        "后端优化接口处理（SQL/逻辑）",
+        "后端超时配置与前端对齐"
+      ],
+      "probability": 0.85,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_056",
+      "name": "唯一约束冲突",
+      "http_codes": [
+        "409"
+      ],
+      "response_patterns": [
+        "409",
+        "conflict",
+        "duplicate",
+        "重复",
+        "已存在"
+      ],
+      "ui_symptoms": [
+        "新增提示已存在",
+        "唯一字段重复"
+      ],
+      "root_cause": "database",
+      "conclusion": "数据库唯一约束冲突（重复数据）",
+      "evidence": [
+        "F12 Network → {url} → Status 409",
+        "响应体：Duplicate entry 'xxx' for key 'uk_xxx'",
+        "数据库已存在相同记录"
+      ],
+      "solution": [
+        "清理重复数据",
+        "前端提交前做重复校验",
+        "后端捕获唯一约束异常并友好提示"
+      ],
+      "probability": 0.95,
+      "priority": "高"
+    },
+    {
+      "id": "SCN_057",
+      "name": "版本冲突",
+      "http_codes": [
+        "409"
+      ],
+      "response_patterns": [
+        "409",
+        "version",
+        "乐观锁"
+      ],
+      "ui_symptoms": [
+        "多人编辑同一数据报冲突",
+        "乐观锁版本不一致"
+      ],
+      "root_cause": "backend",
+      "conclusion": "并发版本冲突（乐观锁失败）",
+      "evidence": [
+        "F12 Network → {url} → Status 409",
+        "响应体：数据已被其他人修改，请刷新重试",
+        "数据库 version 字段不一致"
+      ],
+      "solution": [
+        "前端刷新数据后重试",
+        "提示用户数据已被他人修改",
+        "后端调整乐观锁冲突策略（合并/覆盖）"
+      ],
+      "probability": 0.9,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_058",
+      "name": "重复提交",
+      "http_codes": [
+        "409"
+      ],
+      "response_patterns": [
+        "409",
+        "duplicate",
+        "重复"
+      ],
+      "ui_symptoms": [
+        "连续点击按钮报冲突",
+        "重复提交被拒绝"
+      ],
+      "root_cause": "frontend",
+      "conclusion": "用户重复提交导致冲突",
+      "evidence": [
+        "F12 Network → {url} → Status 409（第二次提交）",
+        "同一请求被提交多次",
+        "后端幂等校验拒绝重复提交"
+      ],
+      "solution": [
+        "前端按钮防重复点击（提交后禁用）",
+        "前端生成请求唯一 ID（幂等键）",
+        "后端幂等接口配置调整"
+      ],
+      "probability": 0.9,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_059",
+      "name": "资源已下线未清理",
+      "http_codes": [
+        "410"
+      ],
+      "response_patterns": [
+        "410",
+        "gone",
+        "已删除"
+      ],
+      "ui_symptoms": [
+        "提示资源不存在/已删除",
+        "旧功能还在调用已删除资源"
+      ],
+      "root_cause": "backend",
+      "conclusion": "资源已永久删除，前端仍在调用",
+      "evidence": [
+        "F12 Network → {url} → Status 410 Gone",
+        "后端确认该资源已被删除",
+        "前端功能入口未下线"
+      ],
+      "solution": [
+        "前端下线对应功能入口",
+        "前端跳转友好提示（资源已删除）",
+        "后端确认资源删除是否符合业务预期"
+      ],
+      "probability": 0.9,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_060",
+      "name": "旧版本接口未清理",
+      "http_codes": [
+        "410"
+      ],
+      "response_patterns": [
+        "410",
+        "gone",
+        "旧版本"
+      ],
+      "ui_symptoms": [
+        "旧版本接口报 410",
+        "升级后旧接口不可用"
+      ],
+      "root_cause": "backend",
+      "conclusion": "旧版本接口已下线（410）",
+      "evidence": [
+        "F12 Network → 旧接口 → Status 410",
+        "系统升级后旧接口被移除",
+        "前端仍引用旧接口"
+      ],
+      "solution": [
+        "前端升级到新接口",
+        "旧接口做兼容转发（过渡期）",
+        "清理浏览器缓存/重新部署前端"
+      ],
+      "probability": 0.85,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_061",
+      "name": "文件超过配置限制",
+      "http_codes": [
+        "413"
+      ],
+      "response_patterns": [
+        "413",
+        "payload too large",
+        "文件过大",
+        "超过"
+      ],
+      "ui_symptoms": [
+        "上传报文件过大",
+        "超过大小限制"
+      ],
+      "root_cause": "config",
+      "conclusion": "文件超过服务器配置的最大大小限制",
+      "evidence": [
+        "第 1 步：F12 Network → {url} → Status 413",
+        "响应体：{\"code\":413,\"message\":\"文件过大，超过 10MB 限制\"}",
+        "application.yml：spring.servlet.multipart.max-file-size=10MB"
+      ],
+      "solution": [
+        "压缩文件后再上传",
+        "修改后端配置 max-file-size（需评估服务器磁盘）",
+        "实现分片上传/断点续传"
+      ],
+      "probability": 1.0,
+      "priority": "高"
+    },
+    {
+      "id": "SCN_062",
+      "name": "请求体过大",
+      "http_codes": [
+        "413"
+      ],
+      "response_patterns": [
+        "413",
+        "payload too large",
+        "body",
+        "请求体"
+      ],
+      "ui_symptoms": [
+        "提交大数据报 413",
+        "JSON 请求体过大"
+      ],
+      "root_cause": "config",
+      "conclusion": "请求体超过后端/Nginx 限制（413）",
+      "evidence": [
+        "F12 Network → {url} → Status 413",
+        "请求体大小超过配置限制",
+        "Nginx client_max_body_size 限制"
+      ],
+      "solution": [
+        "检查 Nginx client_max_body_size 配置",
+        "检查后端请求体大小限制配置",
+        "大数据提交改为分页/分批接口"
+      ],
+      "probability": 0.9,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_063",
+      "name": "Nginx 上传限制",
+      "http_codes": [
+        "413"
+      ],
+      "response_patterns": [
+        "413",
+        "nginx",
+        "client_max_body_size"
+      ],
+      "ui_symptoms": [
+        "Nginx 返回 413",
+        "上传大文件失败"
+      ],
+      "root_cause": "config",
+      "conclusion": "Nginx 上传大小限制导致 413",
+      "evidence": [
+        "F12 Network → {url} → Status 413",
+        "Nginx 日志：client intended to send too large body",
+        "nginx.conf 未配置 client_max_body_size 或值过小"
+      ],
+      "solution": [
+        "nginx.conf 增加 client_max_body_size 50m;",
+        "reload Nginx（nginx -s reload）",
+        "确认上传走的是否是 Nginx 代理端口"
+      ],
+      "probability": 0.95,
+      "priority": "高"
+    },
+    {
+      "id": "SCN_064",
+      "name": "Content-Type 错误",
+      "http_codes": [
+        "415"
+      ],
+      "response_patterns": [
+        "415",
+        "unsupported media type",
+        "content-type"
+      ],
+      "ui_symptoms": [
+        "提交报 415",
+        "Content-Type 设置错误"
+      ],
+      "root_cause": "frontend",
+      "conclusion": "请求 Content-Type 与后端不匹配（415）",
+      "evidence": [
+        "F12 Network → {url} → Status 415",
+        "请求头 Content-Type: text/plain，后端期望 application/json",
+        "响应体：Content type 'text/plain' not supported"
+      ],
+      "solution": [
+        "前端设置正确 Content-Type（application/json）",
+        "检查 axios 是否序列化了对象",
+        "后端接口消费类型与前端一致"
+      ],
+      "probability": 0.95,
+      "priority": "高"
+    },
+    {
+      "id": "SCN_065",
+      "name": "上传格式不支持",
+      "http_codes": [
+        "415"
+      ],
+      "response_patterns": [
+        "415",
+        "format",
+        "类型",
+        "不支持"
+      ],
+      "ui_symptoms": [
+        "上传特定格式文件被拒",
+        "文件类型校验不过"
+      ],
+      "root_cause": "config",
+      "conclusion": "上传文件类型不被后端支持",
+      "evidence": [
+        "F12 Network → {url} → Status 415",
+        "响应体：不支持的文件类型",
+        "后端仅允许指定扩展名"
+      ],
+      "solution": [
+        "转换为后端支持的文件格式",
+        "后端放宽文件类型限制（需评估安全）",
+        "前端选择文件前做类型校验提示"
+      ],
+      "probability": 0.9,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_066",
+      "name": "字段校验失败",
+      "http_codes": [
+        "422"
+      ],
+      "response_patterns": [
+        "422",
+        "validation",
+        "校验",
+        "valid"
+      ],
+      "ui_symptoms": [
+        "提交报字段校验失败",
+        "422 参数错误"
+      ],
+      "root_cause": "backend",
+      "conclusion": "参数校验失败（422 字段级错误）",
+      "evidence": [
+        "F12 Network → {url} → Status 422",
+        "响应体：校验错误详情（字段+错误原因）",
+        "后端 @Valid 校验未通过"
+      ],
+      "solution": [
+        "前端按错误详情修正参数",
+        "前端增加相同规则的校验",
+        "后端校验错误信息友好化"
+      ],
+      "probability": 0.95,
+      "priority": "高"
+    },
+    {
+      "id": "SCN_067",
+      "name": "JSON 格式错误",
+      "http_codes": [
+        "422"
+      ],
+      "response_patterns": [
+        "422",
+        "json",
+        "parse",
+        "格式"
+      ],
+      "ui_symptoms": [
+        "提交报 JSON 解析失败",
+        "请求体不是合法 JSON"
+      ],
+      "root_cause": "frontend",
+      "conclusion": "请求体 JSON 格式错误（前后端序列化问题）",
+      "evidence": [
+        "F12 Network → {url} → Status 422",
+        "响应体：JSON parse error",
+        "请求体含多余逗号/单引号/转义错误"
+      ],
+      "solution": [
+        "前端使用 JSON.stringify 正确序列化",
+        "检查手写 JSON 的语法",
+        "后端返回具体解析错误位置"
+      ],
+      "probability": 0.9,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_068",
+      "name": "参数绑定失败",
+      "http_codes": [
+        "422"
+      ],
+      "response_patterns": [
+        "422",
+        "binding",
+        "bind",
+        "绑定"
+      ],
+      "ui_symptoms": [
+        "提交报参数绑定失败",
+        "DTO 绑定不上"
+      ],
+      "root_cause": "backend",
+      "conclusion": "参数绑定失败（请求体与 DTO 不匹配）",
+      "evidence": [
+        "F12 Network → {url} → Status 422",
+        "响应体：Failed to bind request body",
+        "请求字段与后端 DTO 字段不匹配"
+      ],
+      "solution": [
+        "对照后端 DTO 调整请求字段名",
+        "检查字段类型是否匹配（日期/枚举等）",
+        "后端 DTO 增加必要字段"
+      ],
+      "probability": 0.9,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_069",
+      "name": "限流触发",
+      "http_codes": [
+        "429"
+      ],
+      "response_patterns": [
+        "429",
+        "too many requests",
+        "频繁",
+        "限流"
+      ],
+      "ui_symptoms": [
+        "操作频繁提示稍后再试",
+        "429 限流"
+      ],
+      "root_cause": "backend",
+      "conclusion": "请求频率过高触发限流（429）",
+      "evidence": [
+        "F12 Network → {url} → Status 429",
+        "响应体：{\"code\":429,\"message\":\"操作过于频繁，请稍后再试\"}",
+        "Redis 限流计数器已满"
+      ],
+      "solution": [
+        "等待限流窗口过后重试",
+        "前端节流/防抖（按钮不可重复提交）",
+        "后端调整限流阈值或加白名单"
+      ],
+      "probability": 0.95,
+      "priority": "高"
+    },
+    {
+      "id": "SCN_070",
+      "name": "并发过高",
+      "http_codes": [
+        "429"
+      ],
+      "response_patterns": [
+        "429",
+        "too many",
+        "并发",
+        "繁忙"
+      ],
+      "ui_symptoms": [
+        "系统繁忙请重试",
+        "并发超限"
+      ],
+      "root_cause": "performance",
+      "conclusion": "并发请求过高导致限流/拒绝",
+      "evidence": [
+        "F12 Network → {url} → Status 429",
+        "多用户同时操作触发限流",
+        "后端限流/连接池配置不足"
+      ],
+      "solution": [
+        "错峰操作（避开高峰期）",
+        "后端增大限流阈值/连接池",
+        "系统扩容或加缓存降低压力"
+      ],
+      "probability": 0.85,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_071",
+      "name": "IP 被封禁",
+      "http_codes": [
+        "429"
+      ],
+      "response_patterns": [
+        "429",
+        "blocked",
+        "封"
+      ],
+      "ui_symptoms": [
+        "突然所有请求 429",
+        "IP 被限流封禁"
+      ],
+      "root_cause": "backend",
+      "conclusion": "IP 被限流策略封禁（429）",
+      "evidence": [
+        "F12 Network → {url} → Status 429（全部请求）",
+        "换网络/换 IP 正常",
+        "限流策略按 IP 封禁"
+      ],
+      "solution": [
+        "等待封禁时间到期",
+        "联系管理员解除封禁",
+        "确认是否有脚本/爬虫误触发限流"
+      ],
+      "probability": 0.85,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_072",
+      "name": "后端 SQL 异常",
+      "http_codes": [
+        "500"
+      ],
+      "response_patterns": [
+        "500",
+        "sql",
+        "sqlexception",
+        "cannot be null",
+        "sql语法"
+      ],
+      "ui_symptoms": [
+        "操作失败提示服务器内部错误",
+        "日志报 SQL 异常"
+      ],
+      "root_cause": "backend",
+      "conclusion": "后端 SQL 异常（SQL 语句/字段问题）",
+      "evidence": [
+        "第 1 步：F12 Network → {url} → Status 500",
+        "后端日志：java.sql.SQLException: Column 'email' cannot be null",
+        "堆栈指向 UserMapper.java:58"
+      ],
+      "solution": [
+        "修复 SQL 语句，添加字段处理",
+        "检查表结构与实体字段是否匹配",
+        "联系后端开发修复（附日志堆栈）"
+      ],
+      "probability": 0.95,
+      "priority": "高"
+    },
+    {
+      "id": "SCN_073",
+      "name": "空指针异常",
+      "http_codes": [
+        "500"
+      ],
+      "response_patterns": [
+        "500",
+        "nullpointer",
+        "null",
+        "空指针"
+      ],
+      "ui_symptoms": [
+        "操作报 500 服务器错误",
+        "日志空指针异常"
+      ],
+      "root_cause": "backend",
+      "conclusion": "后端空指针异常（NPE）",
+      "evidence": [
+        "后端日志：java.lang.NullPointerException",
+        "堆栈：at com.xxx.UserService.getUser(UserService.java:42)",
+        "对象未判空直接调用方法"
+      ],
+      "solution": [
+        "联系后端修复（对象判空处理）",
+        "前端排查是否传了空值参数",
+        "补充参数校验避免空值进入业务层"
+      ],
+      "probability": 0.9,
+      "priority": "高"
+    },
+    {
+      "id": "SCN_074",
+      "name": "数据库连接拒绝",
+      "http_codes": [
+        "500"
+      ],
+      "response_patterns": [
+        "500",
+        "connection refused",
+        "connection",
+        "无法连接"
+      ],
+      "ui_symptoms": [
+        "接口 500 报连接拒绝",
+        "数据库连接失败"
+      ],
+      "root_cause": "database",
+      "conclusion": "数据库连接失败（服务在但数据库不可用）",
+      "evidence": [
+        "后端日志：Connection refused: localhost:3306",
+        "数据库服务未启动或连接配置错误",
+        "数据库连接池耗尽"
+      ],
+      "solution": [
+        "检查数据库服务是否启动",
+        "检查数据库连接配置（地址/端口/密码）",
+        "重启数据库或增大连接池"
+      ],
+      "probability": 0.95,
+      "priority": "高"
+    },
+    {
+      "id": "SCN_075",
+      "name": "内存溢出",
+      "http_codes": [
+        "500"
+      ],
+      "response_patterns": [
+        "500",
+        "outofmemory",
+        "oom",
+        "内存"
+      ],
+      "ui_symptoms": [
+        "接口 500 且服务卡顿",
+        "日志 OOM"
+      ],
+      "root_cause": "performance",
+      "conclusion": "后端内存溢出（OOM）",
+      "evidence": [
+        "后端日志：java.lang.OutOfMemoryError: Java heap space",
+        "服务频繁重启/卡顿",
+        "free -h → 内存不足"
+      ],
+      "solution": [
+        "重启服务释放内存（临时）",
+        "优化代码（大对象/缓存/分页）",
+        "增大 JVM 内存参数（-Xmx）"
+      ],
+      "probability": 0.9,
+      "priority": "高"
+    },
+    {
+      "id": "SCN_076",
+      "name": "代码逻辑错误",
+      "http_codes": [
+        "500"
+      ],
+      "response_patterns": [
+        "500",
+        "exception",
+        "error",
+        "异常"
+      ],
+      "ui_symptoms": [
+        "特定操作必现 500",
+        "日志业务异常"
+      ],
+      "root_cause": "backend",
+      "conclusion": "后端代码逻辑错误（业务异常未处理）",
+      "evidence": [
+        "F12 Network → {url} → Status 500",
+        "后端日志：业务异常堆栈",
+        "固定操作路径必现"
+      ],
+      "solution": [
+        "联系后端修复代码逻辑",
+        "前端规避触发路径（临时）",
+        "后端增加全局异常处理（友好提示）"
+      ],
+      "probability": 0.9,
+      "priority": "高"
+    },
+    {
+      "id": "SCN_077",
+      "name": "Redis 连接失败",
+      "http_codes": [
+        "500"
+      ],
+      "response_patterns": [
+        "500",
+        "redis",
+        "connection",
+        "缓存"
+      ],
+      "ui_symptoms": [
+        "接口 500 且与缓存有关",
+        "日志 Redis 连接失败"
+      ],
+      "root_cause": "service",
+      "conclusion": "Redis 连接失败导致接口 500",
+      "evidence": [
+        "后端日志：redis.clients.jedis.exceptions.JedisConnectionException",
+        "redis-cli ping → 无响应",
+        "Redis 服务未启动或密码错误"
+      ],
+      "solution": [
+        "检查 Redis 服务状态（redis-cli ping）",
+        "检查 Redis 配置（地址/端口/密码）",
+        "重启 Redis 服务"
+      ],
+      "probability": 0.9,
+      "priority": "高"
+    },
+    {
+      "id": "SCN_078",
+      "name": "配置错误导致异常",
+      "http_codes": [
+        "500"
+      ],
+      "response_patterns": [
+        "500",
+        "config",
+        "configuration",
+        "配置"
+      ],
+      "ui_symptoms": [
+        "部署后接口 500",
+        "配置项缺失"
+      ],
+      "root_cause": "config",
+      "conclusion": "后端配置错误导致 500",
+      "evidence": [
+        "F12 Network → {url} → Status 500",
+        "后端日志：配置项缺失/格式错误",
+        "新环境部署后出现"
+      ],
+      "solution": [
+        "对照正确环境的配置文件对比",
+        "检查环境变量/配置文件是否完整",
+        "确认配置中心数据是否同步"
+      ],
+      "probability": 0.85,
+      "priority": "高"
+    },
+    {
+      "id": "SCN_079",
+      "name": "文件读写异常",
+      "http_codes": [
+        "500"
+      ],
+      "response_patterns": [
+        "500",
+        "file",
+        "ioexception",
+        "读写",
+        "磁盘"
+      ],
+      "ui_symptoms": [
+        "上传/下载报 500",
+        "磁盘空间不足"
+      ],
+      "root_cause": "config",
+      "conclusion": "文件读写异常（磁盘满/权限/路径）",
+      "evidence": [
+        "后端日志：java.io.IOException: No space left on device",
+        "df -h → 磁盘使用率 95%",
+        "上传目录无写权限"
+      ],
+      "solution": [
+        "清理磁盘（删日志/临时文件）",
+        "检查上传目录权限（chmod）",
+        "检查上传路径配置是否存在"
+      ],
+      "probability": 0.9,
+      "priority": "高"
+    },
+    {
+      "id": "SCN_080",
+      "name": "参数为 null 未校验",
+      "http_codes": [
+        "500"
+      ],
+      "response_patterns": [
+        "500",
+        "null",
+        "参数"
+      ],
+      "ui_symptoms": [
+        "空参数提交导致 500",
+        "日志提示参数为 null"
+      ],
+      "root_cause": "backend",
+      "conclusion": "后端对空参数未做校验导致异常",
+      "evidence": [
+        "F12 Network → {url} → Status 500",
+        "请求参数为空但后端直接使用",
+        "后端日志：argument is null"
+      ],
+      "solution": [
+        "后端补充参数校验（@NotNull/@Valid）",
+        "前端提交前校验必填",
+        "后端对空值做兜底处理"
+      ],
+      "probability": 0.85,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_081",
+      "name": "HTTP 方法不支持",
+      "http_codes": [
+        "501"
+      ],
+      "response_patterns": [
+        "501",
+        "not implemented",
+        "不支持"
+      ],
+      "ui_symptoms": [
+        "接口 501 方法不支持",
+        "后端未实现该功能"
+      ],
+      "root_cause": "backend",
+      "conclusion": "后端未实现该请求方法（501）",
+      "evidence": [
+        "F12 Network → {url} → Status 501",
+        "后端未实现对应方法/功能",
+        "接口文档中无该功能"
+      ],
+      "solution": [
+        "后端实现对应方法",
+        "前端改用已实现接口",
+        "确认功能是否在需求范围内"
+      ],
+      "probability": 0.9,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_082",
+      "name": "后端服务崩溃",
+      "http_codes": [
+        "502"
+      ],
+      "response_patterns": [
+        "502",
+        "bad gateway",
+        "网关"
+      ],
+      "ui_symptoms": [
+        "提示 502 Bad Gateway",
+        "页面打不开"
+      ],
+      "root_cause": "service",
+      "conclusion": "后端服务崩溃/未启动（502）",
+      "evidence": [
+        "第 1 步：F12 Network → {url} → Status 502",
+        "响应内容：Bad Gateway",
+        "进程检查：ps -ef | grep java → 无进程"
+      ],
+      "solution": [
+        "重启后端服务（java -jar / docker restart）",
+        "检查服务崩溃原因（OOM/异常退出）",
+        "Nginx reload 后验证"
+      ],
+      "probability": 1.0,
+      "priority": "高"
+    },
+    {
+      "id": "SCN_083",
+      "name": "Nginx 配置错误",
+      "http_codes": [
+        "502"
+      ],
+      "response_patterns": [
+        "502",
+        "bad gateway",
+        "proxy_pass",
+        "upstream"
+      ],
+      "ui_symptoms": [
+        "502 且后端服务正常",
+        "Nginx 代理配置错"
+      ],
+      "root_cause": "config",
+      "conclusion": "Nginx 代理配置错误导致 502",
+      "evidence": [
+        "F12 Network → {url} → Status 502",
+        "后端服务正常（直连端口可访问）",
+        "Nginx 日志：upstream 配置错误/无法连接"
+      ],
+      "solution": [
+        "检查 nginx.conf proxy_pass 地址/端口",
+        "nginx -t 检查配置语法",
+        "确认 upstream 节点权重/健康状态"
+      ],
+      "probability": 0.95,
+      "priority": "高"
+    },
+    {
+      "id": "SCN_084",
+      "name": "后端端口错误",
+      "http_codes": [
+        "502"
+      ],
+      "response_patterns": [
+        "502",
+        "bad gateway",
+        "connect refused",
+        "端口"
+      ],
+      "ui_symptoms": [
+        "502 且日志报连接拒绝",
+        "Nginx 连不上后端端口"
+      ],
+      "root_cause": "config",
+      "conclusion": "Nginx 转发端口与后端实际端口不一致",
+      "evidence": [
+        "Nginx 日志：connect() failed (111: Connection refused)",
+        "后端实际监听端口与 proxy_pass 配置端口不同",
+        "netstat -tlnp 查看后端实际端口"
+      ],
+      "solution": [
+        "修改 proxy_pass 端口为后端实际端口",
+        "或修改后端启动端口对齐 Nginx 配置",
+        "修改后 nginx -s reload"
+      ],
+      "probability": 0.95,
+      "priority": "高"
+    },
+    {
+      "id": "SCN_085",
+      "name": "服务维护中",
+      "http_codes": [
+        "503"
+      ],
+      "response_patterns": [
+        "503",
+        "service unavailable",
+        "维护"
+      ],
+      "ui_symptoms": [
+        "提示服务维护中",
+        "503 服务不可用"
+      ],
+      "root_cause": "service",
+      "conclusion": "服务维护/暂时不可用（503）",
+      "evidence": [
+        "F12 Network → {url} → Status 503",
+        "响应内容：Service Unavailable",
+        "服务维护开关/维护页面已开启"
+      ],
+      "solution": [
+        "确认服务维护计划与时间",
+        "维护结束后恢复正常",
+        "确认是否有维护开关被误开启"
+      ],
+      "probability": 0.95,
+      "priority": "高"
+    },
+    {
+      "id": "SCN_086",
+      "name": "服务过载",
+      "http_codes": [
+        "503"
+      ],
+      "response_patterns": [
+        "503",
+        "overload",
+        "过载",
+        "busy"
+      ],
+      "ui_symptoms": [
+        "系统繁忙 503",
+        "服务过载不可用"
+      ],
+      "root_cause": "performance",
+      "conclusion": "服务过载导致 503",
+      "evidence": [
+        "F12 Network → {url} → Status 503",
+        "服务器 CPU/内存负载高",
+        "top → load average 过高"
+      ],
+      "solution": [
+        "错峰访问，缓解压力",
+        "重启服务或扩容",
+        "优化慢查询/加缓存降低负载"
+      ],
+      "probability": 0.9,
+      "priority": "高"
+    },
+    {
+      "id": "SCN_087",
+      "name": "慢 SQL 超时",
+      "http_codes": [
+        "504"
+      ],
+      "response_patterns": [
+        "504",
+        "timeout",
+        "慢",
+        "slow"
+      ],
+      "ui_symptoms": [
+        "导出报表超时",
+        "查询大数据量 504"
+      ],
+      "root_cause": "performance",
+      "conclusion": "后端慢 SQL 导致网关超时（504）",
+      "evidence": [
+        "第 1 步：F12 Network → {url} → 先 pending 后 504",
+        "数据库 show processlist → 慢 SQL",
+        "Slow query log: Query took 28 秒"
+      ],
+      "solution": [
+        "优化 SQL（加索引/减少 JOIN）",
+        "分页查询避免一次加载大量数据",
+        "大数据量导出改异步任务"
+      ],
+      "probability": 1.0,
+      "priority": "高"
+    },
+    {
+      "id": "SCN_088",
+      "name": "网关超时配置短",
+      "http_codes": [
+        "504"
+      ],
+      "response_patterns": [
+        "504",
+        "timeout",
+        "proxy_read_timeout"
+      ],
+      "ui_symptoms": [
+        "接口 504 但后端其实处理完了",
+        "网关超时太短"
+      ],
+      "root_cause": "config",
+      "conclusion": "Nginx 网关超时配置过短导致 504",
+      "evidence": [
+        "F12 Network → {url} → Status 504",
+        "Nginx 日志：upstream timed out",
+        "后端日志显示处理成功但耗时 > proxy_read_timeout"
+      ],
+      "solution": [
+        "调大 proxy_read_timeout / proxy_connect_timeout",
+        "长耗时接口改异步处理",
+        "确认后端处理时间是否合理"
+      ],
+      "probability": 0.95,
+      "priority": "高"
+    },
+    {
+      "id": "SCN_089",
+      "name": "第三方接口超时",
+      "http_codes": [
+        "504"
+      ],
+      "response_patterns": [
+        "504",
+        "third party",
+        "外部",
+        "feign",
+        "httpclient"
+      ],
+      "ui_symptoms": [
+        "接口 504 且依赖外部系统",
+        "调用第三方超时"
+      ],
+      "root_cause": "performance",
+      "conclusion": "第三方接口调用超时导致 504",
+      "evidence": [
+        "F12 Network → {url} → Status 504",
+        "后端日志：调用外部接口超时",
+        "第三方服务响应慢/不可用"
+      ],
+      "solution": [
+        "确认第三方系统状态",
+        "后端增加第三方调用超时与重试机制",
+        "第三方接口做降级/缓存"
+      ],
+      "probability": 0.9,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_090",
+      "name": "服务卡死无响应",
+      "http_codes": [
+        "504"
+      ],
+      "response_patterns": [
+        "504",
+        "卡死",
+        "hang",
+        "死锁"
+      ],
+      "ui_symptoms": [
+        "所有接口都 504",
+        "服务卡死无响应"
+      ],
+      "root_cause": "service",
+      "conclusion": "后端服务卡死/死锁导致超时",
+      "evidence": [
+        "F12 Network → 所有接口 → 504/pending",
+        "线程 dump 显示死锁/线程池耗尽",
+        "jstack 查看线程状态"
+      ],
+      "solution": [
+        "重启服务（临时恢复）",
+        "排查死锁/线程池配置",
+        "增加健康检查自动重启机制"
+      ],
+      "probability": 0.9,
+      "priority": "高"
+    },
+    {
+      "id": "SCN_091",
+      "name": "连接池耗尽",
+      "http_codes": [
+        "504"
+      ],
+      "response_patterns": [
+        "504",
+        "connection pool",
+        "连接池",
+        "waiting"
+      ],
+      "ui_symptoms": [
+        "接口 504 且日志提示连接池耗尽",
+        "等待数据库连接超时"
+      ],
+      "root_cause": "performance",
+      "conclusion": "数据库/HTTP 连接池耗尽导致超时",
+      "evidence": [
+        "后端日志：Connection pool exhausted / waiting for connection",
+        "连接池大小配置过小",
+        "存在连接未释放（泄漏）"
+      ],
+      "solution": [
+        "增大连接池大小",
+        "排查连接泄漏（未关闭的连接）",
+        "重启服务释放连接"
+      ],
+      "probability": 0.9,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_092",
+      "name": "HTTP 版本不支持",
+      "http_codes": [
+        "505"
+      ],
+      "response_patterns": [
+        "505",
+        "http version",
+        "version not supported"
+      ],
+      "ui_symptoms": [
+        "提示 HTTP 版本不支持",
+        "老浏览器访问失败"
+      ],
+      "root_cause": "network",
+      "conclusion": "HTTP 版本不支持（客户端过旧或协议不兼容）",
+      "evidence": [
+        "F12 Network → {url} → Status 505",
+        "服务器仅支持 HTTP/1.1，客户端使用 HTTP/2 或过旧",
+        "浏览器版本过旧"
+      ],
+      "solution": [
+        "升级浏览器到新版",
+        "检查 Nginx/服务器 HTTP 协议配置",
+        "确认客户端与服务端协议版本兼容"
+      ],
+      "probability": 0.9,
+      "priority": "低"
+    },
+    {
+      "id": "SCN_093",
+      "name": "接口需登录-检测裸请求401",
+      "http_codes": [
+        "401"
+      ],
+      "response_patterns": [
+        "401",
+        "unauthorized",
+        "未登录",
+        "请先登录",
+        "token"
+      ],
+      "ui_symptoms": [
+        "浏览器能正常打开（200），检测却报 401",
+        "接口提示未登录",
+        "需要登录才能访问的接口"
+      ],
+      "root_cause": "auth",
+      "conclusion": "接口有认证保护：检测为裸请求未携带登录凭证，浏览器 200 是因为已登录（凭证问题，接口本身正常）",
+      "evidence": [
+        "第 1 步：裸请求探测 → Status 401",
+        "浏览器 F12 Network 同一请求 → Status 200（已登录状态）",
+        "同一 URL 浏览器 200 vs 检测 401 = 凭证差异，非接口故障",
+        "F12 请求标头存在 Cookie / Authorization，检测请求未携带"
+      ],
+      "solution": [
+        "检测时在『🔑 登录凭证』区粘贴 F12 请求标头里的 Cookie / Token 后重测",
+        "仅 Cookie 认证的系统：只填 Cookie 即可",
+        "Cookie + Token 双认证的系统：两个都填",
+        "重测仍 401 → 凭证已过期，回 F12 刷新页面重拿最新值",
+        "凭证由系统临时携带、不落库，验证完可清空"
+      ],
+      "probability": 0.98,
+      "priority": "高"
+    },
+    {
+      "id": "SCN_094",
+      "name": "Expect:100-continue 未被中间件支撑",
+      "http_codes": [
+        "100"
+      ],
+      "response_patterns": [
+        "100-continue",
+        "expect"
+      ],
+      "ui_symptoms": [
+        "上传卡住",
+        "上传无响应",
+        "进度条停住"
+      ],
+      "root_cause": "config",
+      "conclusion": "客户端带了 Expect: 100-continue，但代理或后端未按预期给出许可，请求体未正常发送（大文件上传类接口高发）",
+      "evidence": [
+        "第 1 步：F12 Network → {url} → Status 100 或长时间 pending 后失败",
+        "请求标头存在 Expect: 100-continue（curl.exe -v 可见）",
+        "cURL 去掉该头后重试：curl.exe -H \"Expect:\" -X POST ... → 正常返回",
+        "网关日志：无该请求体接收记录"
+      ],
+      "solution": [
+        "客户端/脚本去掉该头后重试（curl.exe 加 -H \"Expect:\"）",
+        "Nginx 侧启用 proxy_http_version 1.1 并确认不拦截 Expect 头",
+        "大文件改分片上传，避免单请求超大 body",
+        "确认后端框架/容器是否关闭了 100-continue 支持"
+      ],
+      "probability": 0.6,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_095",
+      "name": "WebSocket 升级握手未通过",
+      "http_codes": [
+        "101"
+      ],
+      "response_patterns": [
+        "upgrade",
+        "websocket"
+      ],
+      "ui_symptoms": [
+        "WebSocket 连不上",
+        "连接立刻断开",
+        "消息不推送"
+      ],
+      "root_cause": "config",
+      "conclusion": "协议升级（WebSocket）握手未通过：网关未透传 Upgrade / Connection 头，或读超时过短导致连上即断",
+      "evidence": [
+        "第 1 步：F12 Network → WS 标签 → {url} → Status 101 后立即断开，或握手直接失败",
+        "请求标头存在 Upgrade: websocket 与 Connection: Upgrade",
+        "直连后端端口（绕过网关）用 wscat 连接 → 可保持连接",
+        "网关错误日志出现 400 或 101 后 upstream 提前关闭"
+      ],
+      "solution": [
+        "Nginx 补 proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection \"upgrade\";",
+        "加大 proxy_read_timeout（WS 长连接勿用默认 60s）",
+        "确认网关未开启缓冲（proxy_buffering off）",
+        "前端心跳间隔要小于网关 idle 超时"
+      ],
+      "probability": 0.65,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_096",
+      "name": "长任务被网关超时先切断",
+      "http_codes": [
+        "102"
+      ],
+      "response_patterns": [
+        "processing"
+      ],
+      "ui_symptoms": [
+        "导出超时",
+        "报表加载中失败",
+        "长任务失败"
+      ],
+      "root_cause": "performance",
+      "conclusion": "服务端返回 102 表示仍在处理，但网关或浏览器超时更早到达，前端看到的是超时而非最终结果",
+      "evidence": [
+        "第 1 步：F12 Network → {url} → 长时间 pending 后 Status 504（或前端提示超时）",
+        "后端日志显示该任务随后执行成功（说明后端没失败）",
+        "网关 access log 中出现 upstream timed out 记录",
+        "对照：小数据量同接口 → 200，说明是耗时问题不是功能问题"
+      ],
+      "solution": [
+        "把长任务改成异步：立即返回任务 id，前端轮询进度接口",
+        "调大网关 proxy_read_timeout 与前端请求超时（三处都要改：浏览器/网关/后端）",
+        "后端加进度上报（已完成 x/y），让用户看到在处理而非卡死",
+        "慢 SQL 与外部接口调用加超时与缓存，从源头缩短耗时"
+      ],
+      "probability": 0.6,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_097",
+      "name": "Early Hints 预加载未生效",
+      "http_codes": [
+        "103"
+      ],
+      "response_patterns": [
+        "early hints",
+        "link"
+      ],
+      "ui_symptoms": [
+        "首屏变慢",
+        "预加载没生效",
+        "白屏时间变长"
+      ],
+      "root_cause": "frontend",
+      "conclusion": "103 Early Hints 只是首屏性能优化提示，缺失不影响功能正确性；误把它当必须响应会判断错方向",
+      "evidence": [
+        "第 1 步：F12 Network → {url} → Status 103 或直接 200",
+        "响应头出现 Link: </assets/xxx>; rel=preload 才代表有 Early Hints",
+        "对比有无 103 时首屏时间差异（Performance 面板）",
+        "功能类断言全部通过，仅速度指标变差"
+      ],
+      "solution": [
+        "确认该接口不需要前端额外处理，排除功能问题",
+        "检查 CDN / 反向代理是否透传 1xx 响应（部分老版本会吞掉）",
+        "首屏优化可交给 HTTP/2 推送或前端资源内联，不强依赖 103",
+        "若确认无影响，记录为已知项，不占用排障时间"
+      ],
+      "probability": 0.5,
+      "priority": "低"
+    },
+    {
+      "id": "SCN_098",
+      "name": "响应被中间代理改写",
+      "http_codes": [
+        "203"
+      ],
+      "response_patterns": [
+        "non-authoritative",
+        "proxy"
+      ],
+      "ui_symptoms": [
+        "数据对不上",
+        "响应体与后端不一致",
+        "页面多出内容"
+      ],
+      "root_cause": "config",
+      "conclusion": "响应被中间代理改写过（WAF/CDN 注入、去广告、压缩替换），前端拿到的不是后端原始数据",
+      "evidence": [
+        "第 1 步：F12 Network → {url} → Status 203 或 200 但响应体异常",
+        "直连后端端口 curl.exe {host}:{port} 同路径 → 响应体与经网关不同",
+        "响应头出现 X-Cache / Via / Server=nginx 等代理痕迹",
+        "响应体中出现网关注入的脚本或统计代码"
+      ],
+      "solution": [
+        "用 curl.exe 直连后端端口取原始响应，与浏览器响应逐字段对比",
+        "核对 WAF / CDN 的响应改写规则（注入、替换、去广告）并关掉该规则",
+        "确认 Content-Length 与实际响应体长度一致（改写后常见不一致致截断）",
+        "必要时业务接口加签名校验，防止响应被中间篡改"
+      ],
+      "probability": 0.6,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_099",
+      "name": "205 后前端未重置视图",
+      "http_codes": [
+        "205"
+      ],
+      "response_patterns": [
+        "reset content"
+      ],
+      "ui_symptoms": [
+        "提交后表单还有旧值",
+        "列表残留旧数据",
+        "页面没刷新"
+      ],
+      "root_cause": "frontend",
+      "conclusion": "服务端要求重置文档视图，前端未清空表单与列表，用户看到的是旧数据残留",
+      "evidence": [
+        "第 1 步：F12 Network → {url} → Status 205（无响应体）",
+        "后端日志显示操作已成功执行",
+        "数据库中数据已变更，但页面显示未变",
+        "前端代码中未对 205 做处理分支"
+      ],
+      "solution": [
+        "前端在收到 205 时清空表单 / 重置列表 / 重新拉取数据",
+        "或后端改回 200 并显式返回最新数据，减少前端分支",
+        "操作成功后统一走「刷新 + 提示」流程，避免各页面各写一套",
+        "自查：提交按钮是否做了防重复点击"
+      ],
+      "probability": 0.55,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_100",
+      "name": "断点续传 / 分片下载拼接错误",
+      "http_codes": [
+        "206"
+      ],
+      "response_patterns": [
+        "partial content",
+        "content-range",
+        "range"
+      ],
+      "ui_symptoms": [
+        "下载文件不完整",
+        "视频拖动报错",
+        "续传失败"
+      ],
+      "root_cause": "frontend",
+      "conclusion": "206 表示只返回了部分内容（断点续传、音视频拖动、分片下载），前端未按 Range 正确拼接会显示残缺或播放失败",
+      "evidence": [
+        "第 1 步：F12 Network → {url} → Status 206",
+        "请求标头有 Range: bytes=0-1023 之类区间",
+        "响应头有 Content-Range: bytes 0-1023/1048576，其中总数与文件实际大小对比",
+        "把同一文件完整下载后比对 md5，确认不是源文件本身损坏"
+      ],
+      "solution": [
+        "核对请求 Range 区间与响应 Content-Range 是否匹配（起止字节别错位）",
+        "确认文件总大小前后一致（源文件被替换会导致分段错位）",
+        "前端按 Content-Range 顺序拼接并校验最终长度 / 哈希",
+        "确认网关未对大响应做压缩（gzip 会破坏 Range 语义）"
+      ],
+      "probability": 0.6,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_101",
+      "name": "增量更新基线不一致",
+      "http_codes": [
+        "226"
+      ],
+      "response_patterns": [
+        "im used",
+        "delta-base",
+        "instance-manipulation"
+      ],
+      "ui_symptoms": [
+        "增量同步错乱",
+        "数据对不上",
+        "字段缺失"
+      ],
+      "root_cause": "backend",
+      "conclusion": "226 表示返回的是增量更新结果，基线版本不一致会让前端数据错乱",
+      "evidence": [
+        "第 1 步：F12 Network → {url} → Status 226",
+        "响应头出现 Delta-Base 或 IM 相关头",
+        "对照：请求全量接口 → 数据正确，增量结果错误",
+        "前后端记录的基线版本号不一致"
+      ],
+      "solution": [
+        "核对增量基线（ETag / 版本号）是否一致，必要时先做一次全量同步",
+        "前端本地缓存版本与后端版本做校验，不匹配则降级为全量拉取",
+        "确认实例操纵头（Im / Delta-Base）是否被网关剥离",
+        "若业务无强需求，改用全量返回 + 前端 diff，降低出错面"
+      ],
+      "probability": 0.5,
+      "priority": "低"
+    },
+    {
+      "id": "SCN_102",
+      "name": "请求缺少 Content-Length",
+      "http_codes": [
+        "411"
+      ],
+      "response_patterns": [
+        "length required",
+        "content-length"
+      ],
+      "ui_symptoms": [
+        "请求被拒",
+        "上传失败",
+        "请求体没发出去"
+      ],
+      "root_cause": "frontend",
+      "conclusion": "请求缺少 Content-Length，服务端无法确定请求体长度而拒收（手写请求、chunked 传输、代理未补长度）",
+      "evidence": [
+        "第 1 步：F12 Network → {url} → Status 411",
+        "请求标头中不存在 Content-Length，或 Transfer-Encoding: chunked",
+        "curl.exe -H \"Content-Length: 123\" -X POST ... → 正常返回",
+        "网关 access log 中该请求 body 长度为 0"
+      ],
+      "solution": [
+        "客户端补齐 Content-Length（用固定长度而非 chunked）",
+        "Nginx 侧确认 chunked_transfer_encoding 配置，必要时 on",
+        "若使用自己封装的 HTTP 客户端，确认写了 body 后确实发送了长度头",
+        "用 curl.exe -v 对照一次正常请求的请求头差异"
+      ],
+      "probability": 0.6,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_103",
+      "name": "乐观锁 / 条件请求冲突（并发覆盖）",
+      "http_codes": [
+        "412"
+      ],
+      "response_patterns": [
+        "precondition failed",
+        "if-match",
+        "if-unmodified"
+      ],
+      "ui_symptoms": [
+        "保存失败",
+        "提示已被修改",
+        "提交冲突"
+      ],
+      "root_cause": "business",
+      "conclusion": "条件请求校验失败：If-Match / If-Unmodified-Since 与服务端当前版本不一致，说明数据在你操作前已被别人改过（并发控制生效，不是接口故障）",
+      "evidence": [
+        "第 1 步：F12 Network → {url} → Status 412",
+        "请求标头带 If-Match / If-Unmodified-Since，其值落后于当前版本",
+        "后端日志显示版本号校验不通过（expected x, actual y）",
+        "对照：重新拉取后再提交 → 成功，说明版本是关键变量"
+      ],
+      "solution": [
+        "重新拉取最新数据与版本号后再提交，不要用本地缓存的旧版本",
+        "前端保存失败时给出明确提示（数据已被他人修改，请刷新后重试），而不是笼统「保存失败」",
+        "确认业务语义：确需强制覆盖则显式提示并重试一次",
+        "若冲突频繁，评估是否字段级合并优于整行版本号"
+      ],
+      "probability": 0.9,
+      "priority": "高"
+    },
+    {
+      "id": "SCN_104",
+      "name": "缓存校验头过期导致 412",
+      "http_codes": [
+        "412"
+      ],
+      "response_patterns": [
+        "if-modified-since",
+        "if-none-match",
+        "precondition"
+      ],
+      "ui_symptoms": [
+        "刷新后正常",
+        "偶发报错",
+        "首次打开失败"
+      ],
+      "root_cause": "config",
+      "conclusion": "浏览器/代理带了过期的 If-Modified-Since 或 If-None-Match，服务端校验不通过直接 412（缓存与源站不一致）",
+      "evidence": [
+        "第 1 步：F12 Network → {url} → Status 412",
+        "请求标头带 If-Modified-Since / If-None-Match，值是上次缓存的旧值",
+        "Ctrl+F5 强刷（或 Disable cache 勾选）后 → 200 正常",
+        "服务端时间与客户端时间存在明显偏差"
+      ],
+      "solution": [
+        "强刷清缓存后再测，确认是否缓存导致（能复现即缓存问题）",
+        "核对服务端 Last-Modified / ETag 生成逻辑是否正确",
+        "确认服务器时间同步（NTP），时间回拨会生成异常缓存头",
+        "Nginx 侧必要时对接口关闭 proxy_cache，静态资源再走缓存"
+      ],
+      "probability": 0.7,
+      "priority": "高"
+    },
+    {
+      "id": "SCN_105",
+      "name": "GET 参数过大导致 URL 超长",
+      "http_codes": [
+        "414"
+      ],
+      "response_patterns": [
+        "uri too long",
+        "request-uri too large"
+      ],
+      "ui_symptoms": [
+        "大批量查询失败",
+        "列表导出报错",
+        "偶发 414"
+      ],
+      "root_cause": "frontend",
+      "conclusion": "URL 太长：参数放在 query 里且体积过大（批量 id、超长 token、base64 内容），超过服务端 URI 长度上限",
+      "evidence": [
+        "第 1 步：F12 Network → {url} → Status 414，URL 长度明显偏长（数百至数千字符）",
+        "URL 中出现批量 id 列表、base64 串或超长 token",
+        "把参数减少一半后重试 → 200 正常",
+        "网关错误日志：request URI too large"
+      ],
+      "solution": [
+        "改 POST + JSON body 传参，URL 只保留必要标识",
+        "批量操作分批提交（如每批 100 条），避免单次拼接超长",
+        "把长文本 / base64 放到请求体，不要放 query",
+        "确认网关 URI 长度上限（Nginx large_client_header_buffers）并评估是否需调整"
+      ],
+      "probability": 0.85,
+      "priority": "高"
+    },
+    {
+      "id": "SCN_106",
+      "name": "网关 URI / 请求头上限过小",
+      "http_codes": [
+        "414"
+      ],
+      "response_patterns": [
+        "request uri too large",
+        "uri too long"
+      ],
+      "ui_symptoms": [
+        "部分长链接失败",
+        "带 token 失败",
+        "上线后开始 414"
+      ],
+      "root_cause": "config",
+      "conclusion": "请求的 URI 超过网关缓冲区上限（large_client_header_buffers / client_header_buffer_size）被直接拒绝，业务代码未执行",
+      "evidence": [
+        "第 1 步：F12 Network → {url} → Status 414",
+        "网关错误日志：client sent too long URI while reading client request line",
+        "后端应用日志中该请求完全不存在（说明未到后端）",
+        "直连后端端口用同一 URL → 正常，经网关 → 414"
+      ],
+      "solution": [
+        "Nginx 调大 large_client_header_buffers 8 16k、client_header_buffer_size 16k 后 reload",
+        "确认中间安全设备（WAF/负载均衡）没有更小的头限制",
+        "同类问题从源头解决：长参数改 POST，不靠调大缓冲区硬扛",
+        "把该上限写入部署基线，避免换环境后复现"
+      ],
+      "probability": 0.8,
+      "priority": "高"
+    },
+    {
+      "id": "SCN_107",
+      "name": "断点续传范围越界",
+      "http_codes": [
+        "416"
+      ],
+      "response_patterns": [
+        "range not satisfiable",
+        "content-range"
+      ],
+      "ui_symptoms": [
+        "续传失败",
+        "下载报错",
+        "视频拖动失败"
+      ],
+      "root_cause": "frontend",
+      "conclusion": "Range 请求越界：请求的字节区间超出文件实际大小（文件被替换、断点续传记录过期、前端缓存的文件大小不对）",
+      "evidence": [
+        "第 1 步：F12 Network → {url} → Status 416",
+        "请求标头 Range: bytes=1048576- 大于响应 Content-Range 中的文件总大小",
+        "清掉断点记录、从 0 重新下载 → 成功",
+        "同一文件在 CDN / 源站上的大小不一致"
+      ],
+      "solution": [
+        "重新获取文件真实大小后再发起续传，不要沿用旧记录",
+        "清掉本地过期的断点续传记录 / 离线缓存",
+        "确认文件版本是否被替换过（CDN 未刷新会留旧大小）",
+        "前端续传前先发 HEAD 取 Content-Length 做校验"
+      ],
+      "probability": 0.7,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_108",
+      "name": "Expect 头不被服务端支持",
+      "http_codes": [
+        "417"
+      ],
+      "response_patterns": [
+        "expectation failed",
+        "expect",
+        "100-continue"
+      ],
+      "ui_symptoms": [
+        "请求被拒",
+        "上传失败",
+        "偶发 417"
+      ],
+      "root_cause": "config",
+      "conclusion": "客户端带了 Expect: 100-continue（或其它 Expect 期望），服务端不支持该期望，直接返回 417",
+      "evidence": [
+        "第 1 步：F12 Network → {url} → Status 417",
+        "请求标头存在 Expect: 100-continue",
+        "curl.exe -H \"Expect:\" 重试 → 200 正常（去掉该头即正常）",
+        "响应体通常为网关/框架的简短错误页，无业务码"
+      ],
+      "solution": [
+        "去掉 Expect 头后重试，确认是该头导致（cURL 加 -H \"Expect:\"）",
+        "确认容器/框架是否关闭了 100-continue 支持，按需开启",
+        "注意区分：若响应体带业务码，说明 417 是业务异常被映射，转 SCN_109 排查"
+      ],
+      "probability": 0.75,
+      "priority": "高"
+    },
+    {
+      "id": "SCN_109",
+      "name": "业务异常被映射为 417（单行查询返回多行）",
+      "http_codes": [
+        "417"
+      ],
+      "response_patterns": [
+        "expected one result",
+        "toomanyresultsexception",
+        "selectone",
+        "but found"
+      ],
+      "ui_symptoms": [
+        "接口报 417",
+        "详情页报错",
+        "列表正常点进详情就报错"
+      ],
+      "root_cause": "database",
+      "conclusion": "后端用「只允许返回 1 行」的方式查询（selectOne / findOne / getOne），实际查到多行，异常被框架或网关映射成 HTTP 417；根因是数据重复或查询条件不足以唯一定位一行",
+      "evidence": [
+        "第 1 步：F12 Network → {url} → Status 417",
+        "响应体：{\"code\":20001,\"message\":\"Expected one result (or null) to be returned by selectOne(), but found: 2\"}",
+        "同一接口换其它 id 或换列表查询 → 200，说明接口本身可用，是数据/条件问题",
+        "差分对照：不带凭证 401、带凭证 417 → 鉴权层已通过，故障在鉴权之后的业务/数据层"
+      ],
+      "solution": [
+        "按唯一键分组查重复：SELECT 唯一键, COUNT(*) FROM 表 GROUP BY 唯一键 HAVING COUNT(*) > 1",
+        "清理重复数据，并在业务唯一键上补唯一索引，从根上防止再发生",
+        "检查查询条件是否漏了状态 / 租户 / 软删（deleted=0）条件——条件不足会匹配多行",
+        "确认该接口语义是否本应返回列表；是则改用返回列表的查询",
+        "后续遇到同形态（HTTP 4xx + 业务码）问题，先看响应体业务码再定归属"
+      ],
+      "probability": 0.95,
+      "priority": "高"
+    },
+    {
+      "id": "SCN_110",
+      "name": "WAF/安全设备拦截并回 417",
+      "http_codes": [
+        "417"
+      ],
+      "response_patterns": [
+        "forbidden by waf",
+        "expectation failed",
+        "blocked"
+      ],
+      "ui_symptoms": [
+        "偶发 417",
+        "后端无日志",
+        "同参数时好时坏"
+      ],
+      "root_cause": "network",
+      "conclusion": "WAF / 安全网关把该请求判为异常直接返回 417，后端应用日志里没有对应记录（请求未到达业务）",
+      "evidence": [
+        "第 1 步：F12 Network → {url} → Status 417",
+        "后端应用日志该时间点完全无记录（请求未到后端）",
+        "直连后端端口用同一请求 → 正常，经网关 → 417",
+        "WAF 日志中出现该请求的拦截记录与命中规则"
+      ],
+      "solution": [
+        "直连后端端口复测，先确认责任边界（业务 or 安全设备）",
+        "请安全组按 URL / 参数放行，或调整误报规则",
+        "抓取 WAF 拦截日志，核对命中的具体规则与参数",
+        "确认请求参数中是否带了疑似注入/敏感字符被误判"
+      ],
+      "probability": 0.55,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_111",
+      "name": "服务端主动拒绝（占位/风控）",
+      "http_codes": [
+        "418"
+      ],
+      "response_patterns": [
+        "teapot",
+        "418",
+        "bot"
+      ],
+      "ui_symptoms": [
+        "接口拒绝服务",
+        "测试接口异常",
+        "返回奇怪状态码"
+      ],
+      "root_cause": "config",
+      "conclusion": "服务端主动返回 418 拒绝服务，多为反爬虫 / 风控策略或调试占位接口，不具备标准错误语义",
+      "evidence": [
+        "第 1 步：F12 Network → {url} → Status 418",
+        "响应体常为玩笑文案（如 I'm a teapot）或风控提示",
+        "换正常 UA / 降低请求频率 → 结果变化，说明与风控相关",
+        "确认该地址是否本身是占位或彩蛋接口"
+      ],
+      "solution": [
+        "先确认该 URL 是否为占位 / 彩蛋接口（看后端路由定义）",
+        "若是风控：核对 UA、来源 IP、请求频率是否命中规则",
+        "找服务端确认策略，不要按标准状态码语义去猜",
+        "生产环境建议把占位接口下线或改为规范错误码"
+      ],
+      "probability": 0.6,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_112",
+      "name": "HTTP/2 连接复用串到错误后端",
+      "http_codes": [
+        "421"
+      ],
+      "response_patterns": [
+        "misdirected",
+        "421"
+      ],
+      "ui_symptoms": [
+        "偶发失败",
+        "刷新后正常",
+        "多域名环境出错"
+      ],
+      "root_cause": "config",
+      "conclusion": "HTTP/2 连接复用到了不该处理该域名的后端（SNI / Host 不匹配），属网关按域名分流的配置问题",
+      "evidence": [
+        "第 1 步：F12 Network → {url} → Status 421",
+        "HTTP/2 场景下偶发，刷新或换浏览器可能恢复正常",
+        "抓包看连接的 :authority 与实际 Host 不一致",
+        "同一 IP 承载多域名时更容易出现"
+      ],
+      "solution": [
+        "核对网关 / Ingress 的 SNI 与 server_name 分流配置",
+        "为该域名单独建连接（关闭连接复用 / 使用独立 upstream）",
+        "抓包确认 HTTP/2 连接的 :authority 与后端期望域名一致",
+        "确认 HTTP/2 下的证书与虚拟主机绑定正确"
+      ],
+      "probability": 0.65,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_113",
+      "name": "资源被锁（并发编辑）",
+      "http_codes": [
+        "423"
+      ],
+      "response_patterns": [
+        "locked",
+        "423",
+        "锁"
+      ],
+      "ui_symptoms": [
+        "保存提示被锁定",
+        "编辑不了",
+        "偶发无法修改"
+      ],
+      "root_cause": "business",
+      "conclusion": "目标资源被锁：同一记录已有人在编辑（编辑锁 / 审批中 / WebDAV 锁），本次写操作被拒",
+      "evidence": [
+        "第 1 步：F12 Network → {url} → Status 423",
+        "同一条记录另一账号打开着编辑页（可复现对照）",
+        "锁表 / 锁字段中存在该资源的加锁记录",
+        "等待锁超时或关闭对方页面后 → 写操作成功"
+      ],
+      "solution": [
+        "查询锁持有者与加锁时间，确认是否为异常遗留锁",
+        "补锁超时自动释放机制，避免用户关页面后锁一直挂着",
+        "给出明确提示：该记录正在被 xxx 编辑，请稍后重试",
+        "评估是否改用乐观锁 + 冲突提示，减少硬锁体验问题"
+      ],
+      "probability": 0.7,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_114",
+      "name": "批量操作依赖项失败",
+      "http_codes": [
+        "424"
+      ],
+      "response_patterns": [
+        "failed dependency",
+        "424",
+        "depends"
+      ],
+      "ui_symptoms": [
+        "批量提交失败",
+        "部分成功部分失败",
+        "整体报错"
+      ],
+      "root_cause": "backend",
+      "conclusion": "424 表示当前请求因依赖的另一个请求失败而失败（批量 / 事务型调用链），根因在上游那个请求",
+      "evidence": [
+        "第 1 步：F12 Network → {url} → Status 424",
+        "同批次请求中另有请求返回 4xx/5xx（找第一个失败的）",
+        "后端日志显示依赖调用失败（feign / restTemplate 抛错）",
+        "单独执行依赖请求 → 复现同样的错误"
+      ],
+      "solution": [
+        "找到同批次里第一个失败的请求，先修它（424 只是连带结果）",
+        "批量接口改为逐项返回结果，不要整体 424，便于前端定位失败项",
+        "给依赖调用加超时、重试与降级，避免单点失败拖垮整批",
+        "确认事务边界：是否需要部分成功即提交"
+      ],
+      "probability": 0.7,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_115",
+      "name": "TLS 0-RTT 早期数据被拒",
+      "http_codes": [
+        "425"
+      ],
+      "response_patterns": [
+        "too early",
+        "0-rtt",
+        "early data"
+      ],
+      "ui_symptoms": [
+        "偶发首次请求失败",
+        "重试就好",
+        "HTTPS 首次失败"
+      ],
+      "root_cause": "network",
+      "conclusion": "服务端出于重放保护拒绝了 TLS 1.3 早期数据（0-RTT），请求被丢弃或要求重发",
+      "evidence": [
+        "第 1 步：F12 Network → {url} → Status 425",
+        "偶发于首次请求 / 新连接，重试即成功（重放保护特征）",
+        "抓包可见 TLS 1.3 Early Data 被服务端拒绝",
+        "客户端与服务端 TLS 版本协商为 1.3"
+      ],
+      "solution": [
+        "客户端关闭 0-RTT 早期数据后重试",
+        "服务端按需关闭 0-RTT 支持（该特性收益有限、兼容问题多）",
+        "确认是否只有首次请求失败、重试即成功（该特征是典型判据）",
+        "对幂等性要求高的接口建议直接禁用 0-RTT"
+      ],
+      "probability": 0.5,
+      "priority": "低"
+    },
+    {
+      "id": "SCN_116",
+      "name": "强制协议 / 加密升级",
+      "http_codes": [
+        "426"
+      ],
+      "response_patterns": [
+        "upgrade required",
+        "426",
+        "tls"
+      ],
+      "ui_symptoms": [
+        "提示需升级",
+        "访问被拒",
+        "接口要求 HTTPS"
+      ],
+      "root_cause": "config",
+      "conclusion": "服务端要求升级协议：强制 HTTPS、TLS 版本过低或要求 HTTP/2，响应里通常给出 Upgrade 头说明要求",
+      "evidence": [
+        "第 1 步：F12 Network → {url} → Status 426",
+        "响应头带 Upgrade 或 Upgrade-Insecure-Requests 相关提示",
+        "把请求改为 https:// 后 → 正常",
+        "curl.exe -v 可见 TLS 版本协商结果"
+      ],
+      "solution": [
+        "请求改用 https 访问（含前端 baseURL 与网关跳转配置）",
+        "确认客户端 TLS 版本 ≥ 1.2（旧 JDK / 旧系统默认可能不满足）",
+        "按响应 Upgrade 头补齐协议要求后重试",
+        "统一在全站层做 HTTP→HTTPS 跳转，避免各接口各自返回 426"
+      ],
+      "probability": 0.7,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_117",
+      "name": "服务端强制条件请求",
+      "http_codes": [
+        "428"
+      ],
+      "response_patterns": [
+        "precondition required",
+        "428"
+      ],
+      "ui_symptoms": [
+        "保存被拒",
+        "要求先获取版本",
+        "写请求失败"
+      ],
+      "root_cause": "backend",
+      "conclusion": "服务端强制要求带条件头（If-Match / If-None-Match）以防并发覆盖，客户端没带所以被拒",
+      "evidence": [
+        "第 1 步：F12 Network → {url} → Status 428",
+        "请求标头中不存在 If-Match / If-None-Match",
+        "先 GET 拿到 ETag，再带 If-Match 提交 → 成功",
+        "同环境其它接口未带条件头却正常（说明是这些接口的特殊策略）"
+      ],
+      "solution": [
+        "先 GET 拿 ETag / 版本号，写请求带上 If-Match 再提交",
+        "前端统一封装：写操作前自动取版本号并附带条件头",
+        "与服务端确认该强制策略是否必要（会提高客户端改造成本）",
+        "配套解决冲突提示：412 时提示用户刷新重试"
+      ],
+      "probability": 0.6,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_118",
+      "name": "Cookie/Token 过大导致请求头超限",
+      "http_codes": [
+        "431"
+      ],
+      "response_patterns": [
+        "header fields too large",
+        "request header too large",
+        "431",
+        "cookie too large"
+      ],
+      "ui_symptoms": [
+        "上线后开始报错",
+        "登录后接口失败",
+        "清除 Cookie 后正常"
+      ],
+      "root_cause": "frontend",
+      "conclusion": "请求头体积超限：Cookie 累积过多、JWT 过长（塞了大量权限信息）或被塞入大字段，被服务端或网关直接拒绝",
+      "evidence": [
+        "第 1 步：F12 Network → {url} → Status 431",
+        "请求标头 Cookie 或 Authorization 值明显很长（数百字节以上至数 KB）",
+        "清空站点 Cookie 后重登 → 正常，再使用一段时间后复现（累积特征）",
+        "后端应用日志无该请求记录（未到业务层）"
+      ],
+      "solution": [
+        "清理无用 Cookie（尤其同域下历史遗留、未设 Path/过期时间的）",
+        "JWT 只放必要声明，大信息改放服务端 session / 缓存",
+        "网关调大 client_header_buffer_size 与 large_client_header_buffers（治标）",
+        "给 Cookie 设合理 Path、HttpOnly、过期时间，避免长期累积"
+      ],
+      "probability": 0.85,
+      "priority": "高"
+    },
+    {
+      "id": "SCN_119",
+      "name": "Nginx 请求头缓冲区过小",
+      "http_codes": [
+        "431"
+      ],
+      "response_patterns": [
+        "header too large",
+        "request header or cookie too large"
+      ],
+      "ui_symptoms": [
+        "带 token 就失败",
+        "换浏览器正常",
+        "特定用户失败"
+      ],
+      "root_cause": "config",
+      "conclusion": "Nginx 请求头缓冲区过小（client_header_buffer_size / large_client_header_buffers）导致较大请求头被直接拒绝",
+      "evidence": [
+        "第 1 步：F12 Network → {url} → Status 431",
+        "Nginx error.log：client sent too long header line / request header or cookie too large",
+        "后端应用日志无记录（未到业务）",
+        "直连后端端口带同样请求头 → 正常"
+      ],
+      "solution": [
+        "Nginx 调大 client_header_buffer_size 16k、large_client_header_buffers 8 16k 后 reload",
+        "确认中间安全设备 / 负载均衡没有更小的头限制",
+        "同时处理根因：精简 Cookie 与 JWT 体积",
+        "把缓冲区配置写入部署基线，避免换环境复现"
+      ],
+      "probability": 0.8,
+      "priority": "高"
+    },
+    {
+      "id": "SCN_120",
+      "name": "合规 / 审计策略拦截",
+      "http_codes": [
+        "451"
+      ],
+      "response_patterns": [
+        "unavailable for legal reasons",
+        "451",
+        "compliance",
+        "合规"
+      ],
+      "ui_symptoms": [
+        "部分数据打不开",
+        "特定地区失败",
+        "被限制访问"
+      ],
+      "root_cause": "business",
+      "conclusion": "请求因合规 / 法务策略被拦截（数据出境限制、审计封禁、地域限制），属策略性拒绝而非技术故障",
+      "evidence": [
+        "第 1 步：F12 Network → {url} → Status 451",
+        "响应体常带合规说明或审计编号",
+        "同一数据换内网 / 换账号 → 可访问，说明与策略范围相关",
+        "安全合规侧存在对应的拦截记录"
+      ],
+      "solution": [
+        "核对是否命中合规名单 / 地域 / 数据分级策略",
+        "找安全合规确认放行范围与审批流程",
+        "数据导出类操作按流程走审批，不要绕过",
+        "确认响应体已给出可读的合规提示，避免用户误判为系统故障"
+      ],
+      "probability": 0.6,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_121",
+      "name": "内容协商配置自指",
+      "http_codes": [
+        "506"
+      ],
+      "response_patterns": [
+        "variant also negotiates",
+        "506"
+      ],
+      "ui_symptoms": [
+        "返回类型异常",
+        "特定 Accept 失败",
+        "页面乱码"
+      ],
+      "root_cause": "config",
+      "conclusion": "内容协商配置错误：协商出的变体自身又被配置为可协商资源，形成自指（Accept 与 Content-Type 映射配置错）",
+      "evidence": [
+        "第 1 步：F12 Network → {url} → Status 506",
+        "请求标头 Accept 指定了特定类型，服务端协商结果异常",
+        "把 Accept 换成 */* 后 → 正常，说明是协商配置问题",
+        "网关 / Web 服务器配置中出现 AddType / 类型映射相关条目"
+      ],
+      "solution": [
+        "检查 Nginx / Apache 的 AddType、Content-Type 映射配置",
+        "确认协商入口没有指向自身（避免自指循环）",
+        "临时固定 Accept 验证是否为协商问题",
+        "生产环境建议显式声明返回类型，减少协商依赖"
+      ],
+      "probability": 0.5,
+      "priority": "低"
+    },
+    {
+      "id": "SCN_122",
+      "name": "磁盘写满导致写入被拒",
+      "http_codes": [
+        "507"
+      ],
+      "response_patterns": [
+        "insufficient storage",
+        "no space left",
+        "disk full",
+        "507",
+        "quota"
+      ],
+      "ui_symptoms": [
+        "上传失败",
+        "保存失败",
+        "日志报错暴增"
+      ],
+      "root_cause": "service",
+      "conclusion": "存储不足：本机磁盘写满（日志、上传目录、数据库数据盘）或配额超限，写操作被拒",
+      "evidence": [
+        "第 1 步：F12 Network → {url} → Status 507",
+        "服务器执行 df -h → 对应分区 Use% 接近或达到 100%",
+        "日志中刷 no space left on device",
+        "只读操作正常、写操作失败（读写分界明显）"
+      ],
+      "solution": [
+        "df -h 定位写满的分区（重点看 /、/var/log、数据盘）",
+        "清理应用日志与临时文件，配置日志轮转与保留天数",
+        "检查数据库数据盘 / binlog / 备份文件占用",
+        "扩容磁盘或调整保留策略，并加磁盘使用率告警（80% 预警）"
+      ],
+      "probability": 0.9,
+      "priority": "高"
+    },
+    {
+      "id": "SCN_123",
+      "name": "对象存储配额超限",
+      "http_codes": [
+        "507"
+      ],
+      "response_patterns": [
+        "quota exceeded",
+        "storage quota",
+        "insufficient storage",
+        "配额"
+      ],
+      "ui_symptoms": [
+        "上传失败",
+        "本机磁盘还有空间",
+        "文件传不上去"
+      ],
+      "root_cause": "config",
+      "conclusion": "对象存储（OSS / S3）侧配额或容量超限导致上传被拒，本机磁盘可能仍有空间",
+      "evidence": [
+        "第 1 步：F12 Network → {url} → Status 507",
+        "本机 df -h 磁盘充足，排除本地磁盘问题",
+        "应用日志 / 对象存储 SDK 报 quota exceeded 或 507",
+        "对象存储控制台显示用量已达配额上限"
+      ],
+      "solution": [
+        "查对象存储控制台的配额与当前用量，必要时提配额",
+        "清理历史无用文件 / 临时文件",
+        "确认 bucket 生命周期规则是否生效（过期自动清理）",
+        "配置对象存储用量告警，避免写满后才发现"
+      ],
+      "probability": 0.8,
+      "priority": "高"
+    },
+    {
+      "id": "SCN_124",
+      "name": "重定向 / 依赖形成环",
+      "http_codes": [
+        "508"
+      ],
+      "response_patterns": [
+        "loop detected",
+        "redirect loop",
+        "508",
+        "循环"
+      ],
+      "ui_symptoms": [
+        "页面一直转圈",
+        "反复跳转",
+        "打不开"
+      ],
+      "root_cause": "config",
+      "conclusion": "网关检测到循环：重定向 A→B→A，或目录依赖成环（WebDAV），请求被主动中止以免耗尽资源",
+      "evidence": [
+        "第 1 步：F12 Network → {url} → Status 508（或多次 3xx 后失败）",
+        "curl.exe -v -L 可见跳转链成环（A→B→A）",
+        "Nginx 配置中存在互相指向的 rewrite / return 规则",
+        "前端访问地址出现重复前缀（如 /api/api/...）"
+      ],
+      "solution": [
+        "用 curl.exe -v -L 打印完整跳转链，定位环的两个端点",
+        "检查 Nginx rewrite / return 规则是否互相指向，去掉其中一条",
+        "核对前端 baseURL 与网关路径前缀是否叠加（去重）",
+        "配置收敛后加回归用例，防止改配置再次引入环"
+      ],
+      "probability": 0.65,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_125",
+      "name": "HTTP 扩展要求未满足",
+      "http_codes": [
+        "510"
+      ],
+      "response_patterns": [
+        "not extended",
+        "510"
+      ],
+      "ui_symptoms": [
+        "特定接口失败",
+        "老系统报错",
+        "返回罕见状态码"
+      ],
+      "root_cause": "config",
+      "conclusion": "服务端要求按 HTTP 扩展框架补充扩展信息，客户端未提供（老框架或定制网关中较常见）",
+      "evidence": [
+        "第 1 步：F12 Network → {url} → Status 510",
+        "响应头中是否给出所需扩展信息",
+        "对照：其它接口正常，仅该网关下接口返回 510",
+        "后端应用日志无该请求记录（网关层拦截）"
+      ],
+      "solution": [
+        "查看响应头给出的扩展要求，按服务端约定补齐扩展头",
+        "与框架版本 / 网关配置核对，确认是否需要开启对应扩展",
+        "评估是否可改用标准错误码，避免依赖 HTTP 扩展框架",
+        "若确认网关策略，记录到部署说明中"
+      ],
+      "probability": 0.5,
+      "priority": "低"
+    },
+    {
+      "id": "SCN_126",
+      "name": "企业网络准入未完成（WiFi 门户）",
+      "http_codes": [
+        "511"
+      ],
+      "response_patterns": [
+        "network authentication required",
+        "511",
+        "captive",
+        "认证"
+      ],
+      "ui_symptoms": [
+        "所有网站都打不开",
+        "提示需登录网络",
+        "换网络就正常"
+      ],
+      "root_cause": "network",
+      "conclusion": "网络层要求先完成认证（企业 WiFi 门户 / 上网准入），请求在到达业务前被网络设备拦截",
+      "evidence": [
+        "第 1 步：F12 Network → {url} → Status 511（或所有接口同时失败）",
+        "浏览器打开任意 http 站点会跳到认证门户",
+        "换手机热点 / 有线网络复测 → 全部正常，说明是网络准入",
+        "操作系统网络状态显示「需要登录」"
+      ],
+      "solution": [
+        "在浏览器打开 http://neverssl.com 之类站点，触发并完成认证门户登录",
+        "确认终端是否在准入系统中被踢下线 / 证书过期",
+        "换网络复测作为对照，先排除业务系统问题",
+        "把准入认证方式（如 802.1x 证书）写入新员工接入文档"
+      ],
+      "probability": 0.85,
+      "priority": "高"
+    },
+    {
+      "id": "SCN_127",
+      "name": "代理会话过期需重新认证",
+      "http_codes": [
+        "511"
+      ],
+      "response_patterns": [
+        "proxy authentication required",
+        "proxy-authenticate",
+        "511"
+      ],
+      "ui_symptoms": [
+        "突然全部失败",
+        "代理认证提示",
+        "重启客户端就好"
+      ],
+      "root_cause": "auth",
+      "conclusion": "正向代理 / 零信任网关的会话已过期，需要重新认证（响应头通常带 Proxy-Authenticate）",
+      "evidence": [
+        "第 1 步：F12 Network → {url} → Status 511",
+        "响应头存在 Proxy-Authenticate",
+        "零信任客户端显示会话已过期 / 未登录",
+        "重新登录客户端后 → 立即恢复正常"
+      ],
+      "solution": [
+        "重新登录零信任 / 代理客户端，刷新会话",
+        "确认代理侧会话超时策略，必要时调整以免工作中断",
+        "对照直连业务网段是否正常，先划清责任边界",
+        "把该现象加入值班手册（特征是「所有业务同时失败 + 代理认证提示」）"
+      ],
+      "probability": 0.8,
+      "priority": "高"
+    },
+    {
+      "id": "SCN_128",
+      "name": "业务码 20001：单行查询返回多行",
+      "http_codes": [
+        "200"
+      ],
+      "response_patterns": [
+        "20001",
+        "expected one result",
+        "selectone",
+        "but found"
+      ],
+      "ui_symptoms": [
+        "接口 200 但没数据",
+        "详情页空白",
+        "不确定是否成功"
+      ],
+      "root_cause": "database",
+      "conclusion": "HTTP 200 但业务码 20001（非成功码）：后端 selectOne / findOne 查到多行。注意——若网关把该异常映射成 HTTP 417，也属同一根因（见 SCN_109）",
+      "evidence": [
+        "第 1 步：F12 Network → {url} → Status 200",
+        "响应体：{\"code\":20001,\"message\":\"Expected one result (or null) to be returned by selectOne(), but found: 2\",\"data\":null}",
+        "前端只看 HTTP 200 就当成功，实际 data 为 null（表现为空白页）",
+        "同一接口换其它 id → code=0 且有数据，说明是数据重复问题"
+      ],
+      "solution": [
+        "前端统一在响应拦截器判断业务码，非成功码走错误提示，不看 HTTP 状态",
+        "按唯一键分组查重复：SELECT 唯一键, COUNT(*) FROM 表 GROUP BY 唯一键 HAVING COUNT(*) > 1",
+        "清理重复数据并补唯一索引",
+        "检查查询条件是否漏了状态 / 租户 / 软删条件"
+      ],
+      "probability": 0.35,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_129",
+      "name": "业务码表示登录态失效",
+      "http_codes": [
+        "200"
+      ],
+      "response_patterns": [
+        "token 已过期",
+        "token expired",
+        "登录已失效",
+        "invalid token",
+        "40101"
+      ],
+      "ui_symptoms": [
+        "接口 200 但没数据",
+        "页面空白",
+        "操作无反应"
+      ],
+      "root_cause": "auth",
+      "conclusion": "HTTP 200 但业务码表示登录态已失效（token 过期 / 被踢下线），前端若只看 HTTP 状态码会误判为成功，表现为空白页或无反应",
+      "evidence": [
+        "第 1 步：F12 Network → {url} → Status 200",
+        "响应体 code 非成功码，message 为 token 已过期 / 登录已失效",
+        "重新登录后再请求 → code=0 正常",
+        "后端日志显示 token 解析失败或被加入黑名单"
+      ],
+      "solution": [
+        "前端统一拦截业务码：登录态失效即跳登录页并提示",
+        "核对 token 有效期与刷新（refresh）机制是否生效",
+        "确认是否被其它端登录顶下线（多端互踢策略）",
+        "后端对登录态失效统一用同一业务码，别各写各的"
+      ],
+      "probability": 0.35,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_130",
+      "name": "业务码表示数据权限不足",
+      "http_codes": [
+        "200"
+      ],
+      "response_patterns": [
+        "无权限",
+        "权限不足",
+        "no permission",
+        "40301",
+        "forbidden"
+      ],
+      "ui_symptoms": [
+        "接口 200 但没数据",
+        "列表为空",
+        "功能点不动"
+      ],
+      "root_cause": "permission",
+      "conclusion": "HTTP 200 但业务码表示无数据权限（越权访问被业务层拦下），属权限 / 数据范围配置问题而非接口故障",
+      "evidence": [
+        "第 1 步：F12 Network → {url} → Status 200",
+        "响应体 code 非成功码，message 为无权限 / 权限不足",
+        "换有权限账号复测 → code=0 且返回数据",
+        "后端日志显示数据范围过滤后为空或权限校验未通过"
+      ],
+      "solution": [
+        "核对该账号的角色与数据范围（组织 / 租户 / 项目）配置",
+        "确认组织架构与数据归属是否匹配（调岗后常见）",
+        "对照有权限账号复测，快速确认是权限而非接口问题",
+        "前端对无权限给出明确提示，不要静默显示空列表"
+      ],
+      "probability": 0.35,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_131",
+      "name": "业务码表示重复提交 / 唯一键冲突",
+      "http_codes": [
+        "200"
+      ],
+      "response_patterns": [
+        "重复提交",
+        "已存在",
+        "duplicate",
+        "already exists",
+        "幂等"
+      ],
+      "ui_symptoms": [
+        "点两次才失败",
+        "提交提示失败",
+        "数据只有一条"
+      ],
+      "root_cause": "business",
+      "conclusion": "HTTP 200 但业务码表示重复提交 / 唯一键冲突（防重或唯一约束生效），用户看到的是「操作失败」",
+      "evidence": [
+        "第 1 步：F12 Network → {url} → Status 200",
+        "响应体 code 非成功码，message 为已存在 / 重复提交",
+        "连续快速点两次按钮，第二次即报该错（可复现）",
+        "数据库中仅有一条记录，说明第一次其实成功了"
+      ],
+      "solution": [
+        "前端提交按钮加防重复点击（loading 期间禁用）",
+        "幂等接口应返回上一次的结果而不是报错，改善体验",
+        "核对唯一键与业务规则：该冲突是否为预期拦截",
+        "给冲突错误配可读文案（该数据已存在），别只抛业务码"
+      ],
+      "probability": 0.35,
+      "priority": "中"
+    },
+    {
+      "id": "SCN_132",
+      "name": "业务信封失败但前端只看 HTTP 状态",
+      "http_codes": [
+        "200"
+      ],
+      "response_patterns": [
+        "系统繁忙",
+        "操作失败",
+        "server busy",
+        "try again later"
+      ],
+      "ui_symptoms": [
+        "提示成功但数据没变",
+        "偶发无反应",
+        "状态不同步"
+      ],
+      "root_cause": "frontend",
+      "conclusion": "HTTP 200 但业务信封 code 非成功码（后端已判定失败），前端只判断 HTTP 状态就会显示「成功」，造成数据不一致",
+      "evidence": [
+        "第 1 步：F12 Network → {url} → Status 200，但响应体 code 非 0",
+        "响应体 message 为系统繁忙 / 操作失败 等业务失败文案",
+        "数据库数据未变更，前端却提示成功（关键矛盾）",
+        "后端日志中该请求记录为业务失败分支"
+      ],
+      "solution": [
+        "前端统一在后置拦截器判断业务码，非成功码一律按失败处理",
+        "后端统一信封规范（code=0 成功），并给非 0 code 配可读文案与日志",
+        "排查该业务失败的真实原因（看后端日志对应分支）",
+        "加接口契约测试：成功码 + 失败码各一条用例，防止再被漏判"
+      ],
+      "probability": 0.35,
+      "priority": "中"
+    }
+  ]
+}

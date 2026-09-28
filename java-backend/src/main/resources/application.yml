@@ -1,0 +1,28 @@
+server:
+  port: 8000
+
+spring:
+  application:
+    name: fault-detect-system
+  jackson:
+    default-property-inclusion: always
+  web:
+    resources:
+      cache:
+        cachecontrol:
+          # 前端静态资源禁用缓存，避免浏览器加载旧版本页面
+          no-store: true
+
+# ================= 【P3】可选 LLM 增强层 =================
+# 默认关闭：不配置本段则系统完全不发起任何外部请求（差分隔离 + 通用规则推理照常工作）。
+# 需要启用时，把 enabled 置为 true 并填好 endpoint / model / api-key（推荐用环境变量注入密钥）。
+# 全部项均可用环境变量覆盖，例如 FAULTDETECT_LLM_ENABLED=true、FAULTDETECT_LLM_API_KEY=sk-xxx
+faultdetect:
+  llm:
+    enabled: ${FAULTDETECT_LLM_ENABLED:false}
+    endpoint: ${FAULTDETECT_LLM_ENDPOINT:}
+    api-key: ${FAULTDETECT_LLM_API_KEY:}
+    model: ${FAULTDETECT_LLM_MODEL:}
+    timeout-seconds: ${FAULTDETECT_LLM_TIMEOUT:20}
+    # 内网自建模型若使用自签证书，置 true 可跳过证书校验（默认 false）
+    insecure-tls: ${FAULTDETECT_LLM_INSECURE_TLS:false}

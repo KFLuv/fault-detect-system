@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔍 故障检测系统</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <header class="app-header">
+        <div class="header-inner">
+            <h1>🔍 故障检测系统</h1>
+            <p class="subtitle">输入 URL 一键诊断 · 32 状态码 × 92 场景 · 证据链闭环</p>
+            <div class="stats-bar" id="statsBar"></div>
+        </div>
+    </header>
+
+    <nav class="tab-nav">
+        <button class="tab-btn active" data-tab="detect">🛠️ 故障检测</button>
+        <button class="tab-btn" data-tab="scenarios">📚 场景库 <span class="badge" id="scenarioCount"></span></button>
+        <button class="tab-btn" data-tab="status-codes">🔢 状态码 <span class="badge" id="codeCount"></span></button>
+        <button class="tab-btn" data-tab="history">🕘 历史记录</button>
+        <button class="tab-btn" data-tab="add">➕ 新增场景</button>
+    </nav>
+
+    <main class="container">
+        <!-- ============ 故障检测 ============ -->
+        <section id="tab-detect" class="tab-content active">
+            <div class="card input-card">
+                <h2>📝 输入故障信息</h2>
+                <div class="form-row">
+                    <div class="form-group grow">
+                        <label>故障 URL（必填）</label>
+                        <input type="text" id="inputUrl" placeholder="例如：http://192.168.1.100:8081/api/users">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group grow">
+                        <label>故障现象 / 症状（可选，帮助精准匹配）</label>
+                        <input type="text" id="inputSymptom" placeholder="例如：页面显示空表格 / 提示未登录 / 请求超时">
+                    </div>
+                    <div class="form-group">
+                        <label>检测选项</label>
+                        <label class="checkbox"><input type="checkbox" id="optService" checked> 服务存活检测（TCP）</label>
+                    </div>
+                    <div class="form-group">
+                        <label>超时时间</label>
+                        <select id="optTimeout">
+                            <option value="10">10 秒</option>
+                            <option value="5">5 秒</option>
+                            <option value="15">15 秒</option>
+                            <option value="30">30 秒</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="btn-row">
+                    <button class="btn btn-primary" id="btnDetect" onclick="detectFault()">🚀 开始检测</button>
+                    <button class="btn btn-ghost" onclick="loadDemo()">📚 加载示例</button>
+                    <button class="btn btn-ghost" onclick="clearDetect()">🔄 清空</button>
+                </div>
+            </div>
+
+            <div id="loading" class="loading hidden">
+                <div class="spinner"></div>
+                <p>正在执行 7 步检测流程...</p>
+            </div>
+
+            <div id="resultSection" class="hidden">
+                <div class="status-banner" id="statusBanner"></div>
+
+                <div class="card">
+                    <h2>⏱️ 检测流程（第 0 步 → 第 5 步）</h2>
+                    <div id="timelineSteps"></div>
+                </div>
+
+                <div class="card">
+                    <h2>📸 证据链</h2>
+                    <div class="evidence-grid" id="evidenceGrid"></div>
+                </div>
+
+                <div class="card conclusion-card">
+                    <h2>🎯 诊断结论</h2>
+                    <div id="conclusionContent"></div>
+                    <div id="matchAlternatives" class="alt-list"></div>
+                </div>
+
+                <div class="card">
+                    <h2>💡 解决建议</h2>
+                    <div id="solutionContent"></div>
+                </div>
+
+                <div class="card">
+                    <h2>📝 汇报模板（3 段式）</h2>
+                    <div class="report-template" id="reportTemplate"></div>
+                    <div class="btn-row">
+                        <button class="btn btn-primary" onclick="copyReport()">📋 复制汇报文本</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============ 场景库 ============ -->
+        <section id="tab-scenarios" class="tab-content">
+            <div class="card">
+                <div class="toolbar">
+                    <input type="text" id="scenarioSearch" placeholder="搜索场景名称/结论..." oninput="renderScenarios()">
+                    <select id="scenarioCodeFilter" onchange="renderScenarios()">
+                        <option value="">全部状态码</option>
+                    </select>
+                    <select id="scenarioCategoryFilter" onchange="renderScenarios()">
+                        <option value="">全部归属</option>
+                    </select>
+                    <span class="toolbar-hint" id="scenarioTotal"></span>
+                </div>
+                <div id="scenarioList" class="scenario-list"></div>
+            </div>
+        </section>
+
+        <!-- ============ 状态码 ============ -->
+        <section id="tab-status-codes" class="tab-content">
+            <div class="card">
+                <h2>🔢 状态码知识库（32 个）</h2>
+                <div id="statusCodeList" class="code-grid"></div>
+            </div>
+        </section>
+
+        <!-- ============ 历史记录 ============ -->
+        <section id="tab-history" class="tab-content">
+            <div class="card">
+                <div class="toolbar">
+                    <h2>🕘 检测历史记录</h2>
+                    <button class="btn btn-ghost" onclick="loadHistory()">🔄 刷新</button>
+                </div>
+                <div id="historyList" class="history-list"></div>
+            </div>
+        </section>
+
+        <!-- ============ 新增场景 ============ -->
+        <section id="tab-add" class="tab-content">
+            <div class="card">
+                <h2>➕ 新增故障场景</h2>
+                <p class="hint">新增场景会立即生效并持久化，便于后续遇到新问题持续补充。</p>
+                <div class="form-group">
+                    <label>场景名称 *</label>
+                    <input type="text" id="addName" placeholder="例如：短信服务欠费">
+                </div>
+                <div class="form-row">
+                    <div class="form-group grow">
+                        <label>状态码（逗号分隔）*</label>
+                        <input type="text" id="addCodes" placeholder="例如：200, 401">
+                    </div>
+                    <div class="form-group">
+                        <label>问题归属 *</label>
+                        <select id="addRootCause"></select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>响应特征关键词（逗号分隔，命中则加分）</label>
+                    <input type="text" id="addPatterns" placeholder="例如：欠费, balance, insufficient">
+                </div>
+                <div class="form-group">
+                    <label>界面症状关键词（逗号分隔）</label>
+                    <input type="text" id="addSymptoms" placeholder="例如：发送失败, 短信发不出">
+                </div>
+                <div class="form-group">
+                    <label>结论</label>
+                    <input type="text" id="addConclusion" placeholder="例如：短信服务欠费导致发送失败">
+                </div>
+                <div class="form-group">
+                    <label>解决建议（每行一条）</label>
+                    <textarea id="addSolution" rows="3" placeholder="例如：&#10;联系运营商充值&#10;检查短信余额"></textarea>
+                </div>
+                <button class="btn btn-primary" onclick="addScenario()">💾 保存场景</button>
+            </div>
+        </section>
+    </main>
+
+    <footer class="app-footer">
+        故障检测系统 v1.0 · 基于《功能排障标准 SOP（92 场景整合版）》 · 适用驻场实施
+    </footer>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

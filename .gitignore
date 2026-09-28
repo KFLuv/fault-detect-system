@@ -1,0 +1,14 @@
+target/
+*.jar
+*.class
+*.log
+node_modules/
+dist/
+.venv/
+__pycache__/
+data/*.db
+data/*.json
+!data/.gitkeep
+.testdata/
+.idea/
+.vscode/

@@ -1,0 +1,303 @@
+package com.faultdetect;
+
+import com.faultdetect.DetectEngine.DetectionResult;
+import com.faultdetect.Knowledge.Scenario;
+import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Date;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.regex.Pattern;
+
+/**
+ * API 控制器（接口与 Python 版完全一致）
+ *   GET  /api/health          健康检查
+ *   GET  /api/selfcheck       【自检】观测层可信度一键校验（独立真值 vs 系统实测）
+ *   GET  /api/status-codes    32 个状态码
+ *   GET  /api/scenarios       92 个场景（支持 ?code= 过滤）
+ *   POST /api/detect          执行故障检测
+ *   POST /api/add-scenario    新增场景
+ *   GET  /api/history         检测历史
+ *   GET  /api/stats           统计信息
+ * 前端页面由 src/main/resources/static 静态资源提供（/ 与 /static/*）
+ */
+@RestController
+@CrossOrigin(origins = "*")
+public class ApiController {
+
+    private final Knowledge knowledge;
+    private final DetectEngine detectEngine;
+    private final MatcherEngine matcherEngine;
+    private final HistoryRepository history;
+    /** 【P1】差分隔离层：对同一 URL 跑对照实验并推导结论 */
+    private final ContrastProbe contrastProbe;
+    /** 【自检】观测层可信度校验：用独立实现（HttpURLConnection）对内置测试服务取真值，与被测实现对比 */
+    private final SelfCheckService selfCheckService;
+
+    public ApiController(Knowledge knowledge, DetectEngine detectEngine,
+                         MatcherEngine matcherEngine, HistoryRepository history,
+                         ContrastProbe contrastProbe, SelfCheckService selfCheckService) {
+        this.knowledge = knowledge;
+        this.detectEngine = detectEngine;
+        this.matcherEngine = matcherEngine;
+        this.history = history;
+        this.contrastProbe = contrastProbe;
+        this.selfCheckService = selfCheckService;
+    }
+
+    // ================= 请求模型 =================
+
+    public static class DetectRequest {
+        public String url;
+        public String symptom = "";
+        public boolean enable_service_check = true;
+        public int timeout = 10;
+        public Map<String, String> headers;   // 可选：自定义请求头（Token/Cookie 等）
+        /**
+         * 【P1】是否启用差分隔离实验，默认开启。
+         * 开启后会在检测主流程之外，对同一 URL 串行追加最多 7 次只读对照请求：
+         * 去 Authorization、去全部自定义头、换 HEAD、换协议、追加随机参数各 1 次，另加原样重放 2 次。
+         * 全部为幂等方法（GET / HEAD），不会对目标产生写操作。
+         */
+        public boolean enable_contrast = true;
+        /**
+         * 【P3】是否请求可选 LLM 增强层，默认关闭。
+         * 需要同时满足：本字段为 true + 后端 faultdetect.llm.enabled=true + 已配置 endpoint。
+         * 不满足时不会发起任何外部请求；内网不可达 / 调用失败会自动降级为纯规则结论，不影响检测结果。
+         */
+        public boolean enable_llm = false;
+    }
+
+    public static class AddScenarioRequest {
+        public String name;
+        public List<String> http_codes;
+        public List<String> response_patterns = new ArrayList<>();
+        public List<String> ui_symptoms = new ArrayList<>();
+        public String root_cause = "backend";
+        public String conclusion = "";
+        public List<String> solution = new ArrayList<>();
+        public String priority = "中";
+    }
+
+    // ================= 辅助 =================
+
+    private static final Pattern HEADER_NAME = Pattern.compile("^[A-Za-z0-9-]+$");
+
+    /**
+     * 校验自定义请求头：名称只允许字母/数字/连字符，值禁止换行（防 header 注入）。
+     * 返回规范化后的请求头；null 表示未提供。
+     */
+    private Map<String, String> validateHeaders(Map<String, String> headers) {
+        if (headers == null || headers.isEmpty()) {
+            return null;
+        }
+        Map<String, String> clean = new LinkedHashMap<>();
+        for (Map.Entry<String, String> e : headers.entrySet()) {
+            String k = e.getKey();
+            String v = e.getValue();
+            if (k == null || !HEADER_NAME.matcher(k).matches()) {
+                throw new ApiException(400, "请求头名称不合法：" + k);
+            }
+            if (v != null && (v.contains("\r") || v.contains("\n"))) {
+                throw new ApiException(400, "请求头值包含非法字符：" + k);
+            }
+            clean.put(k, v == null ? "" : v);
+        }
+        return clean;
+    }
+
+    private List<Scenario> allScenarios() {
+        List<Scenario> all = new ArrayList<>(knowledge.scenarios);
+        all.addAll(history.getCustomScenarios());
+        return all;
+    }
+
+    private static String now() {
+        return new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date());
+    }
+
+    private static String nowCompact() {
+        return new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
+    }
+
+    // ================= 接口 =================
+
+    @GetMapping("/api/health")
+    public Map<String, Object> health() {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("status", "ok");
+        m.put("total_scenarios", allScenarios().size());
+        m.put("total_status_codes", knowledge.statusCodes.size());
+        return m;
+    }
+
+    /**
+     * 【自检】一键校验「观测层」是否可信。
+     *
+     * 逻辑：内置一个仅绑 127.0.0.1 的极简测试服务，构造 200 / 404 / 500 / GBK 编码 / 挂起超时 /
+     * 端口无人监听 / 域名无法解析 等用例；对每个用例分别用两套互不依赖的实现各探测一次 ——
+     * 真值走 java.net.HttpURLConnection，被测走 DetectEngine（java.net.http.HttpClient），
+     * 最后比对两者是否给出同一结论，输出一致率与逐条明细。
+     *
+     * 用途：让使用者可以随时自行验证「系统查得准不准」，而不必依赖口头承诺。
+     * 安全：全部为 GET 只读请求，测试服务随本次调用结束即关闭，不读写任何业务数据。
+     */
+    @GetMapping("/api/selfcheck")
+    public Map<String, Object> selfCheck() {
+        return selfCheckService.run();
+    }
+
+    @GetMapping("/api/status-codes")
+    public Map<String, Object> statusCodes() {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("total", knowledge.statusCodes.size());
+        m.put("status_codes", knowledge.statusCodes);
+        return m;
+    }
+
+    @GetMapping("/api/scenarios")
+    public Map<String, Object> scenarios(@RequestParam(required = false) String code) {
+        List<Scenario> list = allScenarios();
+        if (code != null && !code.isEmpty()) {
+            list = list.stream()
+                    .filter(s -> s.http_codes != null && s.http_codes.contains(code))
+                    .collect(Collectors.toList());
+        }
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("total", list.size());
+        m.put("category_labels", knowledge.categoryLabels);
+        m.put("category_colors", knowledge.categoryColors);
+        m.put("scenarios", list);
+        return m;
+    }
+
+    @PostMapping("/api/detect")
+    public Map<String, Object> detect(@RequestBody DetectRequest req) {
+        if (req.url == null || req.url.trim().isEmpty()) {
+            throw new ApiException(400, "URL 不能为空");
+        }
+        String url = req.url.trim();
+        // 先校验 URL（不合法直接 400，与 Python 版一致）
+        detectEngine.parseUrl(url);
+
+        int timeout = Math.max(3, Math.min(req.timeout, 30));
+        Map<String, String> headers = validateHeaders(req.headers);
+        DetectionResult dr = detectEngine.runDetection(url, req.enable_service_check, true, timeout, headers);
+        // 【P1】差分隔离实验：默认开启，可通过 enable_contrast=false 关闭。
+        // 必须在 buildReport 之前执行：其推导结论与新增的第 6 步会一并进入报告与证据链。
+        if (req.enable_contrast && dr.error == null) {
+            contrastProbe.run(dr, headers, timeout);
+        }
+        String symptom = req.symptom == null ? "" : req.symptom;
+        // 【P3】enable_llm 默认 false：不勾选时后端不会发起任何外部请求（保持零外部依赖）
+        Map<String, Object> report = matcherEngine.buildReport(dr, symptom, 3, req.enable_llm);
+
+        if (!report.containsKey("error")) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> conclusion = (Map<String, Object>) report.get("conclusion");
+            history.saveHistory(url, (String) report.get("status_code"), conclusion);
+        }
+
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("report_id", "RPT_" + nowCompact());
+        out.put("timestamp", now());
+        out.put("input_url", url);
+        out.put("status_code", report.get("status_code"));
+        out.put("status_text", report.get("status_text"));
+        out.put("steps", report.get("steps"));
+        out.put("evidence_chain", report.get("evidence_chain"));
+        out.put("conclusion", report.get("conclusion"));
+        out.put("report", report.get("report"));
+        out.put("key_info", report.get("key_info"));   // 【P0-2】追加字段，既有字段顺序与含义均不变
+        // 【P1】差分隔离实验结果（对照矩阵 + 差分推导结论）：追加字段，既有字段顺序与含义均不变
+        out.put("contrast", dr.contrast == null ? Collections.emptyMap() : dr.contrast);
+        // 【P2】通用假设推理结果（多假设：描述 / 置信度 / 支持证据 / 反证条件 / 验证动作）：追加字段
+        out.put("hypotheses", report.get("hypotheses"));
+        // 【P3】可选 LLM 增强分析结果（未请求 / 未启用 / 已降级 / 成功均如实返回）：追加字段
+        out.put("llm", report.get("llm"));
+        return out;
+    }
+
+    @PostMapping("/api/add-scenario")
+    public Map<String, Object> addScenario(@RequestBody AddScenarioRequest req) {
+        if (req.name == null || req.name.trim().isEmpty()) {
+            throw new ApiException(400, "场景名称不能为空");
+        }
+        if (req.http_codes == null || req.http_codes.isEmpty()) {
+            throw new ApiException(400, "至少需要一个状态码");
+        }
+        if (req.root_cause == null || !knowledge.categoryLabels.containsKey(req.root_cause)) {
+            throw new ApiException(400, "问题归属不合法");
+        }
+
+        int maxId = 0;
+        for (Scenario s : allScenarios()) {
+            try {
+                maxId = Math.max(maxId, Integer.parseInt(s.id.split("_")[1]));
+            } catch (Exception ignored) {
+                // 非 SCN_xxx 格式则忽略
+            }
+        }
+        Scenario sc = new Scenario();
+        sc.id = String.format("SCN_%03d", maxId + 1);
+        sc.name = req.name;
+        sc.http_codes = req.http_codes.stream().map(String::valueOf).collect(Collectors.toList());
+        sc.response_patterns = req.response_patterns == null ? new ArrayList<>() : req.response_patterns;
+        sc.ui_symptoms = req.ui_symptoms == null ? new ArrayList<>() : req.ui_symptoms;
+        sc.root_cause = req.root_cause;
+        sc.conclusion = (req.conclusion == null || req.conclusion.trim().isEmpty()) ? req.name : req.conclusion;
+        sc.evidence = Collections.singletonList("（自定义场景）请按 SOP 手动补充证据");
+        sc.solution = (req.solution == null || req.solution.isEmpty())
+                ? Collections.singletonList("联系研发确认处理方案") : req.solution;
+        sc.probability = 0.9;
+        sc.priority = req.priority == null ? "中" : req.priority;
+        sc.custom = true;
+
+        history.addCustomScenario(sc);
+
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("status", "ok");
+        out.put("scenario", sc);
+        out.put("total", allScenarios().size());
+        return out;
+    }
+
+    @GetMapping("/api/history")
+    public Map<String, Object> history(@RequestParam(defaultValue = "30") int limit) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("history", history.listHistory(limit));
+        return m;
+    }
+
+    /** 一键清空检测历史记录 */
+    @DeleteMapping("/api/history")
+    public Map<String, Object> clearHistory() {
+        history.clearHistory();
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("status", "ok");
+        m.put("history_count", history.listHistory(9999).size());
+        return m;
+    }
+
+    @GetMapping("/api/stats")
+    public Map<String, Object> stats() {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("total_scenarios", allScenarios().size());
+        m.put("total_status_codes", knowledge.statusCodes.size());
+        m.put("custom_scenarios", history.getCustomScenarios().size());
+        m.put("history_count", history.listHistory(9999).size());
+        m.put("category_labels", knowledge.categoryLabels);
+        return m;
+    }
+}

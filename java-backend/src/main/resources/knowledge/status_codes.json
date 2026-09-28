@@ -1,0 +1,1946 @@
+{
+  "status_codes": [
+    {
+      "code": "pending",
+      "name": "无响应 / 超时",
+      "category": "无响应",
+      "problem_category": [
+        "服务",
+        "网络"
+      ],
+      "next_step": "第 0 步检查服务存活（TCP 连接测试）",
+      "description": "请求发出后一直处于 pending 状态，最终超时。通常表示请求未到达后端服务。",
+      "memory": "空白/pending → 网络/服务问题，先做第 0 步",
+      "typical": [
+        "后端服务未启动",
+        "网络不通",
+        "防火墙拦截"
+      ]
+    },
+    {
+      "code": "100",
+      "name": "Continue",
+      "category": "信息",
+      "problem_category": [
+        "配置",
+        "网络"
+      ],
+      "next_step": "确认代理/网关是否丢弃或未处理 Expect: 100-continue",
+      "description": "客户端先询问能否继续发送请求体，服务端未按预期给出许可。多见于大文件上传时客户端带 Expect: 100-continue，而中间代理或后端不处理该头，导致上传卡住或直接失败。",
+      "memory": "100 → 继续发送的许可，中间代理可能不支持",
+      "typical": [
+        "大文件上传卡住",
+        "代理不支持 Expect 头",
+        "上传请求一直 pending"
+      ]
+    },
+    {
+      "code": "101",
+      "name": "Switching Protocols",
+      "category": "信息",
+      "problem_category": [
+        "配置",
+        "网络"
+      ],
+      "next_step": "检查网关是否放行 WebSocket 升级头（Upgrade / Connection）",
+      "description": "协议升级握手（多为 WebSocket）。若握手成功但连接立刻断开，通常是网关未透传升级头或读超时过短。",
+      "memory": "101 → 协议升级，查网关 WS 放行与超时",
+      "typical": [
+        "WebSocket 连不上",
+        "连接立刻断开",
+        "Nginx 未配 upgrade"
+      ]
+    },
+    {
+      "code": "102",
+      "name": "Processing",
+      "category": "信息",
+      "problem_category": [
+        "性能"
+      ],
+      "next_step": "确认网关/浏览器超时是否早于后端实际处理时间",
+      "description": "服务端表示请求仍在处理中（长任务）。前端看到的「超时」往往不是后端失败，而是中间层超时更早。",
+      "memory": "102 → 还在处理，查超时链配置",
+      "typical": [
+        "长任务超时",
+        "报表导出失败",
+        "网关超时过短"
+      ]
+    },
+    {
+      "code": "103",
+      "name": "Early Hints",
+      "category": "信息",
+      "problem_category": [
+        "前端体验",
+        "性能"
+      ],
+      "next_step": "确认为性能优化提示，不影响功能正确性",
+      "description": "早期提示，用于让浏览器提前预加载资源。缺失只影响首屏速度，不影响功能；把它当必须响应会误判。",
+      "memory": "103 → 预加载提示，只影响性能",
+      "typical": [
+        "首屏变慢",
+        "预加载未生效",
+        "代理未透传 103"
+      ]
+    },
+    {
+      "code": "200",
+      "name": "OK",
+      "category": "成功",
+      "problem_category": [
+        "数据库",
+        "前端渲染"
+      ],
+      "next_step": "分析响应数据（有数据=前端渲染问题；空数组=数据库没数据）",
+      "description": "后端正常返回。需继续分析返回数据判断问题归属。",
+      "memory": "200 → 后端正常，看返回数据",
+      "typical": [
+        "数据库无数据",
+        "前端渲染问题",
+        "CORS 跨域",
+        "缓存旧数据"
+      ]
+    },
+    {
+      "code": "201",
+      "name": "Created",
+      "category": "成功",
+      "problem_category": [
+        "前端体验"
+      ],
+      "next_step": "检查前端是否处理成功响应（刷新/提示）",
+      "description": "资源创建成功。常见问题是前端未做成功提示或未刷新列表。",
+      "memory": "201 → 创建成功，看前端有无提示",
+      "typical": [
+        "成功但无提示",
+        "创建后列表不刷新"
+      ]
+    },
+    {
+      "code": "202",
+      "name": "Accepted",
+      "category": "成功",
+      "problem_category": [
+        "前端",
+        "后端"
+      ],
+      "next_step": "检查异步任务状态",
+      "description": "请求已接受，但处理未完成（异步任务）。需检查任务状态查询接口。",
+      "memory": "202 → 异步任务，查任务进度",
+      "typical": [
+        "异步任务无状态展示",
+        "任务失败无反馈"
+      ]
+    },
+    {
+      "code": "203",
+      "name": "Non-Authoritative Information",
+      "category": "成功",
+      "problem_category": [
+        "配置",
+        "网络"
+      ],
+      "next_step": "对比直连后端与经过网关的响应体差异",
+      "description": "响应被中间代理改写（WAF/CDN 注入、去广告、压缩替换），拿到的不是后端原始数据。",
+      "memory": "203 → 响应被代理改写过",
+      "typical": [
+        "WAF 改写响应",
+        "CDN 注入脚本",
+        "响应体与后端不一致"
+      ]
+    },
+    {
+      "code": "204",
+      "name": "No Content",
+      "category": "成功",
+      "problem_category": [
+        "前端体验"
+      ],
+      "next_step": "检查前端是否处理成功响应",
+      "description": "请求成功但无返回内容。前端若不处理易误判为失败。",
+      "memory": "204 → 成功无内容，前端要加提示",
+      "typical": [
+        "成功但前端报错",
+        "无提示"
+      ]
+    },
+    {
+      "code": "205",
+      "name": "Reset Content",
+      "category": "成功",
+      "problem_category": [
+        "前端体验",
+        "前端渲染"
+      ],
+      "next_step": "前端在收到 205 后清空表单 / 重置视图",
+      "description": "服务端要求客户端重置文档视图。前端未处理会残留旧数据，用户以为没生效。",
+      "memory": "205 → 需前端重置视图",
+      "typical": [
+        "提交后表单仍有旧值",
+        "列表残留旧数据",
+        "无提示"
+      ]
+    },
+    {
+      "code": "206",
+      "name": "Partial Content",
+      "category": "成功",
+      "problem_category": [
+        "前端",
+        "配置"
+      ],
+      "next_step": "核对请求 Range 与响应 Content-Range 是否匹配",
+      "description": "返回部分内容（断点续传、音视频拖动、大文件分片下载）。前端未按 Range 拼接会显示残缺或播放失败。",
+      "memory": "206 → 部分内容，查 Range 拼接",
+      "typical": [
+        "断点续传失败",
+        "视频拖动报错",
+        "下载文件不完整"
+      ]
+    },
+    {
+      "code": "226",
+      "name": "IM Used",
+      "category": "成功",
+      "problem_category": [
+        "后端",
+        "缓存"
+      ],
+      "next_step": "核对增量更新基线（ETag / 版本号）是否一致",
+      "description": "返回的是增量更新结果。基线不一致会让前端数据错乱，需确认实例操纵相关头与版本。",
+      "memory": "226 → 增量更新，查基线版本",
+      "typical": [
+        "增量同步错乱",
+        "数据对不上",
+        "基线版本不一致"
+      ]
+    },
+    {
+      "code": "300",
+      "name": "Multiple Choices",
+      "category": "重定向",
+      "problem_category": [
+        "后端",
+        "配置"
+      ],
+      "next_step": "检查服务端多选项配置",
+      "description": "请求存在多个可选响应。业务系统中较少出现，通常为配置问题。",
+      "memory": "300 → 多选项，检查服务端配置",
+      "typical": [
+        "多语言/多版本未选择"
+      ]
+    },
+    {
+      "code": "301",
+      "name": "Moved Permanently",
+      "category": "重定向",
+      "problem_category": [
+        "前端"
+      ],
+      "next_step": "修正前端 URL",
+      "description": "资源永久迁移。前端还在使用旧 URL 导致跳转。",
+      "memory": "301 → 永久重定向，改前端 URL",
+      "typical": [
+        "旧链接未更新",
+        "接口地址变更"
+      ]
+    },
+    {
+      "code": "302",
+      "name": "Found",
+      "category": "重定向",
+      "problem_category": [
+        "前端",
+        "后端"
+      ],
+      "next_step": "检查重定向配置是否异常",
+      "description": "临时重定向。常见问题：登录后重定向死循环、重定向丢失 Token。",
+      "memory": "302 → 临时重定向，查是否死循环",
+      "typical": [
+        "登录重定向死循环",
+        "重定向丢 Token"
+      ]
+    },
+    {
+      "code": "303",
+      "name": "See Other",
+      "category": "重定向",
+      "problem_category": [
+        "前端"
+      ],
+      "next_step": "检查前端是否跟随重定向",
+      "description": "POST 提交后应重定向到 GET 结果页。前端未处理导致界面无变化。",
+      "memory": "303 → POST 后跳转 GET，前端处理",
+      "typical": [
+        "提交后未跳转结果页"
+      ]
+    },
+    {
+      "code": "304",
+      "name": "Not Modified",
+      "category": "重定向",
+      "problem_category": [
+        "前端",
+        "缓存"
+      ],
+      "next_step": "检查缓存策略",
+      "description": "资源未修改，命中缓存。若数据不更新，多为强缓存配置问题。",
+      "memory": "304 → 命中缓存，数据不更新查缓存",
+      "typical": [
+        "数据被缓存不更新",
+        "强缓存未失效"
+      ]
+    },
+    {
+      "code": "307",
+      "name": "Temporary Redirect",
+      "category": "重定向",
+      "problem_category": [
+        "后端",
+        "配置"
+      ],
+      "next_step": "检查重定向目标配置",
+      "description": "临时重定向（保留请求方法）。多为网关/网关路由配置问题。",
+      "memory": "307 → 临时重定向，查路由配置",
+      "typical": [
+        "网关路由配置错误"
+      ]
+    },
+    {
+      "code": "308",
+      "name": "Permanent Redirect",
+      "category": "重定向",
+      "problem_category": [
+        "配置"
+      ],
+      "next_step": "检查重定向规则",
+      "description": "永久重定向（保留请求方法）。配置错误会导致功能异常。",
+      "memory": "308 → 永久重定向，查配置",
+      "typical": [
+        "重定向规则配置错误"
+      ]
+    },
+    {
+      "code": "400",
+      "name": "Bad Request",
+      "category": "客户端错误",
+      "problem_category": [
+        "前端",
+        "参数"
+      ],
+      "next_step": "检查请求参数（F12 → Payload）",
+      "description": "请求参数错误。多为前端提交的参数不符合后端校验规则。",
+      "memory": "400 → 参数错误，前端校验不足",
+      "typical": [
+        "参数缺失",
+        "参数格式错误",
+        "参数类型错误"
+      ]
+    },
+    {
+      "code": "401",
+      "name": "Unauthorized",
+      "category": "客户端错误",
+      "problem_category": [
+        "前端",
+        "认证"
+      ],
+      "next_step": "检查登录状态 / Token",
+      "description": "未授权。前端未携带 Token 或 Token 已过期。",
+      "memory": "401 → 未登录/Token 失效，重新登录",
+      "typical": [
+        "未登录",
+        "Token 过期",
+        "Token 格式错误"
+      ]
+    },
+    {
+      "code": "402",
+      "name": "Payment Required",
+      "category": "客户端错误",
+      "problem_category": [
+        "业务",
+        "配置"
+      ],
+      "next_step": "检查业务功能开通状态",
+      "description": "需要付费/开通。多为业务功能未开通或授权过期。",
+      "memory": "402 → 付费功能未开通",
+      "typical": [
+        "功能未开通",
+        "授权过期"
+      ]
+    },
+    {
+      "code": "403",
+      "name": "Forbidden",
+      "category": "客户端错误",
+      "problem_category": [
+        "权限"
+      ],
+      "next_step": "检查 RBAC 权限配置",
+      "description": "权限不足。用户已登录但无该功能访问权限。",
+      "memory": "403 → 权限不足，查 RBAC 配置",
+      "typical": [
+        "角色权限不足",
+        "RBAC 配置错误",
+        "IP 被限制"
+      ]
+    },
+    {
+      "code": "404",
+      "name": "Not Found",
+      "category": "客户端错误",
+      "problem_category": [
+        "前端",
+        "后端"
+      ],
+      "next_step": "Postman 验证后端是否存在该接口",
+      "description": "接口不存在。需区分前端路径写错还是后端接口未开发。",
+      "memory": "404 → 路径错误 or 未开发（需验证）",
+      "typical": [
+        "前端路径错误",
+        "接口未开发",
+        "接口被删除"
+      ]
+    },
+    {
+      "code": "405",
+      "name": "Method Not Allowed",
+      "category": "客户端错误",
+      "problem_category": [
+        "后端"
+      ],
+      "next_step": "检查请求方法与后端控制器映射",
+      "description": "请求方法不被允许。前端传错方法或后端未配置该方法。",
+      "memory": "405 → GET/POST 用错或未实现",
+      "typical": [
+        "GET/POST 用错",
+        "方法未实现",
+        "预检请求 405"
+      ]
+    },
+    {
+      "code": "406",
+      "name": "Not Acceptable",
+      "category": "客户端错误",
+      "problem_category": [
+        "前端",
+        "配置"
+      ],
+      "next_step": "检查 Accept 请求头与响应格式",
+      "description": "服务器无法按客户端要求的格式返回。多为 Accept 头或响应格式配置问题。",
+      "memory": "406 → Accept 头与响应格式不匹配",
+      "typical": [
+        "Accept 头错误",
+        "响应格式不支持"
+      ]
+    },
+    {
+      "code": "408",
+      "name": "Request Timeout",
+      "category": "客户端错误",
+      "problem_category": [
+        "网络",
+        "后端"
+      ],
+      "next_step": "检查网络延迟与后端超时配置",
+      "description": "请求超时。网络慢或后端处理超过超时时间。",
+      "memory": "408 → 请求超时，查网络与超时配置",
+      "typical": [
+        "网络延迟高",
+        "后端处理超时"
+      ]
+    },
+    {
+      "code": "409",
+      "name": "Conflict",
+      "category": "客户端错误",
+      "problem_category": [
+        "后端",
+        "数据库"
+      ],
+      "next_step": "检查日志与数据库约束",
+      "description": "资源冲突。唯一约束冲突、版本冲突或重复提交。",
+      "memory": "409 → 冲突，查约束与重复数据",
+      "typical": [
+        "唯一约束冲突",
+        "版本冲突",
+        "重复提交"
+      ]
+    },
+    {
+      "code": "410",
+      "name": "Gone",
+      "category": "客户端错误",
+      "problem_category": [
+        "后端",
+        "前端"
+      ],
+      "next_step": "确认资源是否已下线，更新前端 URL",
+      "description": "资源已被永久删除。前端仍在调用已下线的资源。",
+      "memory": "410 → 资源已删除，清理前端调用",
+      "typical": [
+        "资源已下线",
+        "旧版本接口"
+      ]
+    },
+    {
+      "code": "411",
+      "name": "Length Required",
+      "category": "客户端错误",
+      "problem_category": [
+        "前端",
+        "配置"
+      ],
+      "next_step": "补齐 Content-Length，或确认代理是否改写为 chunked",
+      "description": "请求缺少 Content-Length，服务端无法确定请求体长度而拒收。常见于手写请求、chunked 传输或代理未补长度。",
+      "memory": "411 → 缺 Content-Length",
+      "typical": [
+        "请求体长度未知",
+        "chunked 传输被拒",
+        "代理未补长度"
+      ]
+    },
+    {
+      "code": "412",
+      "name": "Precondition Failed",
+      "category": "客户端错误",
+      "problem_category": [
+        "业务",
+        "后端"
+      ],
+      "next_step": "重新拉取最新数据与版本号后再提交（别用缓存的旧版本）",
+      "description": "条件请求校验失败：If-Match / If-Unmodified-Since 与服务端当前版本不一致，说明数据在你操作前已被别人改过。属并发控制生效，不是接口故障。",
+      "memory": "412 → 版本冲突，重新拉最新再提交",
+      "typical": [
+        "并发修改覆盖",
+        "乐观锁冲突",
+        "版本号过期"
+      ]
+    },
+    {
+      "code": "413",
+      "name": "Payload Too Large",
+      "category": "客户端错误",
+      "problem_category": [
+        "后端",
+        "配置"
+      ],
+      "next_step": "检查文件大小与上传配置",
+      "description": "请求体过大。超过后端或 Nginx 配置的上传大小限制。",
+      "memory": "413 → 文件超限，查配置",
+      "typical": [
+        "文件超过配置",
+        "请求体过大",
+        "Nginx 限制"
+      ]
+    },
+    {
+      "code": "414",
+      "name": "URI Too Long",
+      "category": "客户端错误",
+      "problem_category": [
+        "前端",
+        "配置"
+      ],
+      "next_step": "检查是否把大参数放在 query 里；确认网关 URI 长度上限",
+      "description": "URL 太长：参数放在 query 中且体积过大（批量 id、超长 token、base64 内容），超过服务端 URI 长度上限。",
+      "memory": "414 → URL 太长，改 POST 传参",
+      "typical": [
+        "批量 id 放 URL",
+        "token 放 URL",
+        "Nginx URI 上限小"
+      ]
+    },
+    {
+      "code": "415",
+      "name": "Unsupported Media Type",
+      "category": "客户端错误",
+      "problem_category": [
+        "前端",
+        "配置"
+      ],
+      "next_step": "检查 Content-Type 请求头",
+      "description": "请求媒体类型不受支持。前端 Content-Type 设置错误或上传格式不支持。",
+      "memory": "415 → Content-Type 错误",
+      "typical": [
+        "Content-Type 错误",
+        "上传格式不支持"
+      ]
+    },
+    {
+      "code": "416",
+      "name": "Range Not Satisfiable",
+      "category": "客户端错误",
+      "problem_category": [
+        "前端",
+        "配置"
+      ],
+      "next_step": "重新获取文件大小后再续传，清掉过期的断点记录",
+      "description": "Range 请求越界：请求的字节区间超出文件实际大小。多为文件被替换、断点续传记录过期、前端缓存的文件大小不对。",
+      "memory": "416 → 范围越界，文件大小不一致",
+      "typical": [
+        "断点续传记录过期",
+        "文件被替换",
+        "视频拖动越界"
+      ]
+    },
+    {
+      "code": "417",
+      "name": "Expectation Failed",
+      "category": "客户端错误",
+      "problem_category": [
+        "配置",
+        "后端",
+        "数据库"
+      ],
+      "next_step": "去掉 Expect 头重试；若响应体带业务码，按业务错误继续排查",
+      "description": "服务端无法满足请求头里的 Expect 期望（多为 Expect: 100-continue）。注意：部分网关/框架会把业务异常（如 selectOne 查到多行）也映射成 417，此时必须看响应体的业务码而不是只看状态码。",
+      "memory": "417 → 先看响应体业务码，再判是 Expect 还是业务异常",
+      "typical": [
+        "Expect 头不被支持",
+        "业务异常被映射为 417",
+        "selectOne 返回多行"
+      ]
+    },
+    {
+      "code": "418",
+      "name": "I'm a Teapot",
+      "category": "客户端错误",
+      "problem_category": [
+        "配置",
+        "业务"
+      ],
+      "next_step": "确认该地址是否为占位/彩蛋接口，或是否被风控策略拦截",
+      "description": "服务端主动拒绝服务的非标准状态码，多为反爬/风控策略或调试占位接口，不具备标准语义。",
+      "memory": "418 → 主动拒绝，查风控或占位接口",
+      "typical": [
+        "反爬拦截",
+        "调试占位接口",
+        "风控策略拒绝"
+      ]
+    },
+    {
+      "code": "421",
+      "name": "Misdirected Request",
+      "category": "客户端错误",
+      "problem_category": [
+        "配置",
+        "网络"
+      ],
+      "next_step": "核对网关 SNI / server_name 分流配置，必要时关闭连接复用",
+      "description": "HTTP/2 连接复用到了不该处理该域名的后端（SNI/Host 不匹配），属网关按域名分流的配置问题。",
+      "memory": "421 → 连接复用到错误后端，查 SNI 分流",
+      "typical": [
+        "多域名共用网关",
+        "SNI 配置错误",
+        "连接复用串了后端"
+      ]
+    },
+    {
+      "code": "422",
+      "name": "Unprocessable Entity",
+      "category": "客户端错误",
+      "problem_category": [
+        "后端",
+        "前端"
+      ],
+      "next_step": "检查参数校验规则与错误详情",
+      "description": "参数语义错误（校验失败）。与 400 类似，多为字段级校验失败。",
+      "memory": "422 → 参数校验失败",
+      "typical": [
+        "字段校验失败",
+        "JSON 格式错误",
+        "参数绑定失败"
+      ]
+    },
+    {
+      "code": "423",
+      "name": "Locked",
+      "category": "客户端错误",
+      "problem_category": [
+        "业务",
+        "数据库"
+      ],
+      "next_step": "查询锁持有者，确认是否为异常遗留锁；补锁超时自动释放",
+      "description": "目标资源被锁：同一记录已有人在编辑（编辑锁 / 审批中 / WebDAV 锁），本次写操作被拒。",
+      "memory": "423 → 资源被锁，查谁持有锁",
+      "typical": [
+        "并发编辑同一记录",
+        "遗留锁未释放",
+        "审批中禁止修改"
+      ]
+    },
+    {
+      "code": "424",
+      "name": "Failed Dependency",
+      "category": "客户端错误",
+      "problem_category": [
+        "后端",
+        "业务"
+      ],
+      "next_step": "先找到同批次里第一个失败的请求，修它",
+      "description": "当前请求因依赖的另一个请求失败而失败（批量 / 事务型调用链），根因在上游那个请求。",
+      "memory": "424 → 依赖项失败，找上游第一个错",
+      "typical": [
+        "批量操作部分失败",
+        "事务链上游失败",
+        "依赖服务不可用"
+      ]
+    },
+    {
+      "code": "425",
+      "name": "Too Early",
+      "category": "客户端错误",
+      "problem_category": [
+        "网络",
+        "配置"
+      ],
+      "next_step": "关闭 TLS 0-RTT 早期数据后重试",
+      "description": "服务端出于重放保护拒绝了 TLS 1.3 早期数据（0-RTT），请求被丢弃或要求重发。",
+      "memory": "425 → 0-RTT 被拒，关掉早期数据",
+      "typical": [
+        "TLS 1.3 0-RTT 被拒",
+        "偶发首次请求失败",
+        "重放保护"
+      ]
+    },
+    {
+      "code": "426",
+      "name": "Upgrade Required",
+      "category": "客户端错误",
+      "problem_category": [
+        "配置",
+        "网络"
+      ],
+      "next_step": "按响应 Upgrade 头补齐要求（多为改用 HTTPS 或提高 TLS 版本）",
+      "description": "服务端要求升级协议：强制 HTTPS、TLS 版本过低或要求 HTTP/2，响应里通常给出 Upgrade 头说明要求。",
+      "memory": "426 → 要求升级协议，看 Upgrade 头",
+      "typical": [
+        "强制 HTTPS",
+        "TLS 版本过低",
+        "要求 HTTP/2"
+      ]
+    },
+    {
+      "code": "428",
+      "name": "Precondition Required",
+      "category": "客户端错误",
+      "problem_category": [
+        "后端",
+        "业务"
+      ],
+      "next_step": "先 GET 拿 ETag / 版本号，写请求带上 If-Match",
+      "description": "服务端强制要求带条件头（If-Match / If-None-Match）以防并发覆盖，客户端没带所以被拒。",
+      "memory": "428 → 服务端要求条件请求，补 If-Match",
+      "typical": [
+        "强制防并发覆盖",
+        "缺少 ETag",
+        "写请求被要求带条件头"
+      ]
+    },
+    {
+      "code": "429",
+      "name": "Too Many Requests",
+      "category": "客户端错误",
+      "problem_category": [
+        "后端",
+        "性能"
+      ],
+      "next_step": "检查限流配置（Redis 限流）",
+      "description": "请求频率过高，触发限流。需等待或调整限流配置。",
+      "memory": "429 → 限流，等一会或加权限",
+      "typical": [
+        "限流触发",
+        "并发过高",
+        "IP 被封"
+      ]
+    },
+    {
+      "code": "431",
+      "name": "Request Header Fields Too Large",
+      "category": "客户端错误",
+      "problem_category": [
+        "前端",
+        "配置",
+        "认证"
+      ],
+      "next_step": "检查 Cookie / Token 体积；确认网关请求头缓冲区上限",
+      "description": "请求头体积超限：Cookie 累积过多、JWT 过长（塞了大量权限信息）或被塞入大字段，被服务端或网关直接拒绝。",
+      "memory": "431 → 请求头过大，清 Cookie 或调大缓冲",
+      "typical": [
+        "Cookie 累积过多",
+        "JWT 太长",
+        "Nginx 头缓冲过小"
+      ]
+    },
+    {
+      "code": "451",
+      "name": "Unavailable For Legal Reasons",
+      "category": "客户端错误",
+      "problem_category": [
+        "业务",
+        "配置"
+      ],
+      "next_step": "核对是否命中合规/地域策略，找安全合规确认放行范围",
+      "description": "请求因合规/法务策略被拦截（数据出境限制、审计封禁、地域限制），属策略性拒绝而非技术故障。",
+      "memory": "451 → 合规策略拦截",
+      "typical": [
+        "数据出境受限",
+        "地域限制",
+        "审计封禁"
+      ]
+    },
+    {
+      "code": "500",
+      "name": "Internal Server Error",
+      "category": "服务端错误",
+      "problem_category": [
+        "后端",
+        "数据库"
+      ],
+      "next_step": "查看后端日志堆栈（必做）",
+      "description": "服务器内部错误。后端代码异常，需查看日志定位。",
+      "memory": "500 → 后端问题，查日志",
+      "typical": [
+        "SQL 异常",
+        "空指针",
+        "连接拒绝",
+        "OOM",
+        "代码逻辑错误"
+      ]
+    },
+    {
+      "code": "501",
+      "name": "Not Implemented",
+      "category": "服务端错误",
+      "problem_category": [
+        "后端"
+      ],
+      "next_step": "确认后端是否实现该方法",
+      "description": "服务器不支持请求方法/功能。后端未实现。",
+      "memory": "501 → 功能未实现",
+      "typical": [
+        "HTTP 方法不支持"
+      ]
+    },
+    {
+      "code": "502",
+      "name": "Bad Gateway",
+      "category": "服务端错误",
+      "problem_category": [
+        "服务"
+      ],
+      "next_step": "检查后端进程与 Nginx 配置",
+      "description": "网关无法连接后端服务。多为后端服务崩溃或端口错误。",
+      "memory": "502 → 后端服务挂了，重启",
+      "typical": [
+        "后端崩溃",
+        "Nginx 配置错误",
+        "后端端口错误"
+      ]
+    },
+    {
+      "code": "503",
+      "name": "Service Unavailable",
+      "category": "服务端错误",
+      "problem_category": [
+        "服务"
+      ],
+      "next_step": "检查服务状态与过载情况",
+      "description": "服务暂时不可用。维护中或过载。",
+      "memory": "503 → 服务维护/过载",
+      "typical": [
+        "服务维护",
+        "服务过载"
+      ]
+    },
+    {
+      "code": "504",
+      "name": "Gateway Timeout",
+      "category": "服务端错误",
+      "problem_category": [
+        "性能"
+      ],
+      "next_step": "检查慢 SQL 与网关超时配置",
+      "description": "网关超时。后端处理超过网关超时时间，多为慢查询。",
+      "memory": "504 → 后端超时，查慢 SQL",
+      "typical": [
+        "慢 SQL",
+        "网关超时短",
+        "第三方接口超时",
+        "服务卡死"
+      ]
+    },
+    {
+      "code": "505",
+      "name": "HTTP Version Not Supported",
+      "category": "服务端错误",
+      "problem_category": [
+        "网络"
+      ],
+      "next_step": "升级浏览器或客户端",
+      "description": "HTTP 版本不支持。客户端太旧或服务器不支持该协议版本。",
+      "memory": "505 → HTTP 版本不支持，升级浏览器",
+      "typical": [
+        "浏览器过旧",
+        "协议版本不兼容"
+      ]
+    },
+    {
+      "code": "506",
+      "name": "Variant Also Negotiates",
+      "category": "服务端错误",
+      "problem_category": [
+        "配置"
+      ],
+      "next_step": "检查网关/Web 服务器的 Content-Type 与协商映射配置",
+      "description": "内容协商配置错误：协商出的变体自身又被配置为可协商资源，形成自指。属服务端配置问题。",
+      "memory": "506 → 内容协商配置自指",
+      "typical": [
+        "协商映射配置错",
+        "AddType 配错",
+        "返回类型指向自身"
+      ]
+    },
+    {
+      "code": "507",
+      "name": "Insufficient Storage",
+      "category": "服务端错误",
+      "problem_category": [
+        "服务",
+        "配置"
+      ],
+      "next_step": "df -h 看磁盘；清理日志与临时文件；检查对象存储配额",
+      "description": "存储不足：本机磁盘写满（日志、上传目录、数据库数据盘）或对象存储配额超限，写操作被拒。",
+      "memory": "507 → 存储不足，先看磁盘和配额",
+      "typical": [
+        "磁盘写满",
+        "日志未清理",
+        "对象存储配额超限"
+      ]
+    },
+    {
+      "code": "508",
+      "name": "Loop Detected",
+      "category": "服务端错误",
+      "problem_category": [
+        "配置"
+      ],
+      "next_step": "用 curl.exe -v -L 看跳转链，找出环",
+      "description": "网关检测到循环：重定向 A→B→A，或目录依赖成环（WebDAV），请求被主动中止以免耗尽资源。",
+      "memory": "508 → 检测到循环，查跳转链",
+      "typical": [
+        "重定向成环",
+        "rewrite 规则互相指向",
+        "baseURL 与网关前缀叠加"
+      ]
+    },
+    {
+      "code": "510",
+      "name": "Not Extended",
+      "category": "服务端错误",
+      "problem_category": [
+        "配置"
+      ],
+      "next_step": "看响应头是否给出所需扩展，按服务端要求补齐",
+      "description": "服务端要求按 HTTP 扩展框架补充扩展信息，客户端未提供。老框架或定制网关中较常见。",
+      "memory": "510 → 扩展要求未满足",
+      "typical": [
+        "老框架扩展要求",
+        "定制网关策略",
+        "缺少扩展头"
+      ]
+    },
+    {
+      "code": "511",
+      "name": "Network Authentication Required",
+      "category": "服务端错误",
+      "problem_category": [
+        "网络",
+        "认证"
+      ],
+      "next_step": "先在浏览器触发认证门户完成登录；对照其它网络复测",
+      "description": "网络层要求先完成认证（企业 WiFi 门户、上网准入、代理认证），请求在到达业务前被网络设备拦截。",
+      "memory": "511 → 网络准入未完成，先过认证门户",
+      "typical": [
+        "企业 WiFi 门户认证",
+        "上网准入掉线",
+        "代理认证过期"
+      ]
+    }
+  ],
+  "status_code_map": {
+    "pending": {
+      "code": "pending",
+      "name": "无响应 / 超时",
+      "category": "无响应",
+      "problem_category": [
+        "服务",
+        "网络"
+      ],
+      "next_step": "第 0 步检查服务存活（TCP 连接测试）",
+      "description": "请求发出后一直处于 pending 状态，最终超时。通常表示请求未到达后端服务。",
+      "memory": "空白/pending → 网络/服务问题，先做第 0 步",
+      "typical": [
+        "后端服务未启动",
+        "网络不通",
+        "防火墙拦截"
+      ]
+    },
+    "100": {
+      "code": "100",
+      "name": "Continue",
+      "category": "信息",
+      "problem_category": [
+        "配置",
+        "网络"
+      ],
+      "next_step": "确认代理/网关是否丢弃或未处理 Expect: 100-continue",
+      "description": "客户端先询问能否继续发送请求体，服务端未按预期给出许可。多见于大文件上传时客户端带 Expect: 100-continue，而中间代理或后端不处理该头，导致上传卡住或直接失败。",
+      "memory": "100 → 继续发送的许可，中间代理可能不支持",
+      "typical": [
+        "大文件上传卡住",
+        "代理不支持 Expect 头",
+        "上传请求一直 pending"
+      ]
+    },
+    "101": {
+      "code": "101",
+      "name": "Switching Protocols",
+      "category": "信息",
+      "problem_category": [
+        "配置",
+        "网络"
+      ],
+      "next_step": "检查网关是否放行 WebSocket 升级头（Upgrade / Connection）",
+      "description": "协议升级握手（多为 WebSocket）。若握手成功但连接立刻断开，通常是网关未透传升级头或读超时过短。",
+      "memory": "101 → 协议升级，查网关 WS 放行与超时",
+      "typical": [
+        "WebSocket 连不上",
+        "连接立刻断开",
+        "Nginx 未配 upgrade"
+      ]
+    },
+    "102": {
+      "code": "102",
+      "name": "Processing",
+      "category": "信息",
+      "problem_category": [
+        "性能"
+      ],
+      "next_step": "确认网关/浏览器超时是否早于后端实际处理时间",
+      "description": "服务端表示请求仍在处理中（长任务）。前端看到的「超时」往往不是后端失败，而是中间层超时更早。",
+      "memory": "102 → 还在处理，查超时链配置",
+      "typical": [
+        "长任务超时",
+        "报表导出失败",
+        "网关超时过短"
+      ]
+    },
+    "103": {
+      "code": "103",
+      "name": "Early Hints",
+      "category": "信息",
+      "problem_category": [
+        "前端体验",
+        "性能"
+      ],
+      "next_step": "确认为性能优化提示，不影响功能正确性",
+      "description": "早期提示，用于让浏览器提前预加载资源。缺失只影响首屏速度，不影响功能；把它当必须响应会误判。",
+      "memory": "103 → 预加载提示，只影响性能",
+      "typical": [
+        "首屏变慢",
+        "预加载未生效",
+        "代理未透传 103"
+      ]
+    },
+    "200": {
+      "code": "200",
+      "name": "OK",
+      "category": "成功",
+      "problem_category": [
+        "数据库",
+        "前端渲染"
+      ],
+      "next_step": "分析响应数据（有数据=前端渲染问题；空数组=数据库没数据）",
+      "description": "后端正常返回。需继续分析返回数据判断问题归属。",
+      "memory": "200 → 后端正常，看返回数据",
+      "typical": [
+        "数据库无数据",
+        "前端渲染问题",
+        "CORS 跨域",
+        "缓存旧数据"
+      ]
+    },
+    "201": {
+      "code": "201",
+      "name": "Created",
+      "category": "成功",
+      "problem_category": [
+        "前端体验"
+      ],
+      "next_step": "检查前端是否处理成功响应（刷新/提示）",
+      "description": "资源创建成功。常见问题是前端未做成功提示或未刷新列表。",
+      "memory": "201 → 创建成功，看前端有无提示",
+      "typical": [
+        "成功但无提示",
+        "创建后列表不刷新"
+      ]
+    },
+    "202": {
+      "code": "202",
+      "name": "Accepted",
+      "category": "成功",
+      "problem_category": [
+        "前端",
+        "后端"
+      ],
+      "next_step": "检查异步任务状态",
+      "description": "请求已接受，但处理未完成（异步任务）。需检查任务状态查询接口。",
+      "memory": "202 → 异步任务，查任务进度",
+      "typical": [
+        "异步任务无状态展示",
+        "任务失败无反馈"
+      ]
+    },
+    "203": {
+      "code": "203",
+      "name": "Non-Authoritative Information",
+      "category": "成功",
+      "problem_category": [
+        "配置",
+        "网络"
+      ],
+      "next_step": "对比直连后端与经过网关的响应体差异",
+      "description": "响应被中间代理改写（WAF/CDN 注入、去广告、压缩替换），拿到的不是后端原始数据。",
+      "memory": "203 → 响应被代理改写过",
+      "typical": [
+        "WAF 改写响应",
+        "CDN 注入脚本",
+        "响应体与后端不一致"
+      ]
+    },
+    "204": {
+      "code": "204",
+      "name": "No Content",
+      "category": "成功",
+      "problem_category": [
+        "前端体验"
+      ],
+      "next_step": "检查前端是否处理成功响应",
+      "description": "请求成功但无返回内容。前端若不处理易误判为失败。",
+      "memory": "204 → 成功无内容，前端要加提示",
+      "typical": [
+        "成功但前端报错",
+        "无提示"
+      ]
+    },
+    "205": {
+      "code": "205",
+      "name": "Reset Content",
+      "category": "成功",
+      "problem_category": [
+        "前端体验",
+        "前端渲染"
+      ],
+      "next_step": "前端在收到 205 后清空表单 / 重置视图",
+      "description": "服务端要求客户端重置文档视图。前端未处理会残留旧数据，用户以为没生效。",
+      "memory": "205 → 需前端重置视图",
+      "typical": [
+        "提交后表单仍有旧值",
+        "列表残留旧数据",
+        "无提示"
+      ]
+    },
+    "206": {
+      "code": "206",
+      "name": "Partial Content",
+      "category": "成功",
+      "problem_category": [
+        "前端",
+        "配置"
+      ],
+      "next_step": "核对请求 Range 与响应 Content-Range 是否匹配",
+      "description": "返回部分内容（断点续传、音视频拖动、大文件分片下载）。前端未按 Range 拼接会显示残缺或播放失败。",
+      "memory": "206 → 部分内容，查 Range 拼接",
+      "typical": [
+        "断点续传失败",
+        "视频拖动报错",
+        "下载文件不完整"
+      ]
+    },
+    "226": {
+      "code": "226",
+      "name": "IM Used",
+      "category": "成功",
+      "problem_category": [
+        "后端",
+        "缓存"
+      ],
+      "next_step": "核对增量更新基线（ETag / 版本号）是否一致",
+      "description": "返回的是增量更新结果。基线不一致会让前端数据错乱，需确认实例操纵相关头与版本。",
+      "memory": "226 → 增量更新，查基线版本",
+      "typical": [
+        "增量同步错乱",
+        "数据对不上",
+        "基线版本不一致"
+      ]
+    },
+    "300": {
+      "code": "300",
+      "name": "Multiple Choices",
+      "category": "重定向",
+      "problem_category": [
+        "后端",
+        "配置"
+      ],
+      "next_step": "检查服务端多选项配置",
+      "description": "请求存在多个可选响应。业务系统中较少出现，通常为配置问题。",
+      "memory": "300 → 多选项，检查服务端配置",
+      "typical": [
+        "多语言/多版本未选择"
+      ]
+    },
+    "301": {
+      "code": "301",
+      "name": "Moved Permanently",
+      "category": "重定向",
+      "problem_category": [
+        "前端"
+      ],
+      "next_step": "修正前端 URL",
+      "description": "资源永久迁移。前端还在使用旧 URL 导致跳转。",
+      "memory": "301 → 永久重定向，改前端 URL",
+      "typical": [
+        "旧链接未更新",
+        "接口地址变更"
+      ]
+    },
+    "302": {
+      "code": "302",
+      "name": "Found",
+      "category": "重定向",
+      "problem_category": [
+        "前端",
+        "后端"
+      ],
+      "next_step": "检查重定向配置是否异常",
+      "description": "临时重定向。常见问题：登录后重定向死循环、重定向丢失 Token。",
+      "memory": "302 → 临时重定向，查是否死循环",
+      "typical": [
+        "登录重定向死循环",
+        "重定向丢 Token"
+      ]
+    },
+    "303": {
+      "code": "303",
+      "name": "See Other",
+      "category": "重定向",
+      "problem_category": [
+        "前端"
+      ],
+      "next_step": "检查前端是否跟随重定向",
+      "description": "POST 提交后应重定向到 GET 结果页。前端未处理导致界面无变化。",
+      "memory": "303 → POST 后跳转 GET，前端处理",
+      "typical": [
+        "提交后未跳转结果页"
+      ]
+    },
+    "304": {
+      "code": "304",
+      "name": "Not Modified",
+      "category": "重定向",
+      "problem_category": [
+        "前端",
+        "缓存"
+      ],
+      "next_step": "检查缓存策略",
+      "description": "资源未修改，命中缓存。若数据不更新，多为强缓存配置问题。",
+      "memory": "304 → 命中缓存，数据不更新查缓存",
+      "typical": [
+        "数据被缓存不更新",
+        "强缓存未失效"
+      ]
+    },
+    "307": {
+      "code": "307",
+      "name": "Temporary Redirect",
+      "category": "重定向",
+      "problem_category": [
+        "后端",
+        "配置"
+      ],
+      "next_step": "检查重定向目标配置",
+      "description": "临时重定向（保留请求方法）。多为网关/网关路由配置问题。",
+      "memory": "307 → 临时重定向，查路由配置",
+      "typical": [
+        "网关路由配置错误"
+      ]
+    },
+    "308": {
+      "code": "308",
+      "name": "Permanent Redirect",
+      "category": "重定向",
+      "problem_category": [
+        "配置"
+      ],
+      "next_step": "检查重定向规则",
+      "description": "永久重定向（保留请求方法）。配置错误会导致功能异常。",
+      "memory": "308 → 永久重定向，查配置",
+      "typical": [
+        "重定向规则配置错误"
+      ]
+    },
+    "400": {
+      "code": "400",
+      "name": "Bad Request",
+      "category": "客户端错误",
+      "problem_category": [
+        "前端",
+        "参数"
+      ],
+      "next_step": "检查请求参数（F12 → Payload）",
+      "description": "请求参数错误。多为前端提交的参数不符合后端校验规则。",
+      "memory": "400 → 参数错误，前端校验不足",
+      "typical": [
+        "参数缺失",
+        "参数格式错误",
+        "参数类型错误"
+      ]
+    },
+    "401": {
+      "code": "401",
+      "name": "Unauthorized",
+      "category": "客户端错误",
+      "problem_category": [
+        "前端",
+        "认证"
+      ],
+      "next_step": "检查登录状态 / Token",
+      "description": "未授权。前端未携带 Token 或 Token 已过期。",
+      "memory": "401 → 未登录/Token 失效，重新登录",
+      "typical": [
+        "未登录",
+        "Token 过期",
+        "Token 格式错误"
+      ]
+    },
+    "402": {
+      "code": "402",
+      "name": "Payment Required",
+      "category": "客户端错误",
+      "problem_category": [
+        "业务",
+        "配置"
+      ],
+      "next_step": "检查业务功能开通状态",
+      "description": "需要付费/开通。多为业务功能未开通或授权过期。",
+      "memory": "402 → 付费功能未开通",
+      "typical": [
+        "功能未开通",
+        "授权过期"
+      ]
+    },
+    "403": {
+      "code": "403",
+      "name": "Forbidden",
+      "category": "客户端错误",
+      "problem_category": [
+        "权限"
+      ],
+      "next_step": "检查 RBAC 权限配置",
+      "description": "权限不足。用户已登录但无该功能访问权限。",
+      "memory": "403 → 权限不足，查 RBAC 配置",
+      "typical": [
+        "角色权限不足",
+        "RBAC 配置错误",
+        "IP 被限制"
+      ]
+    },
+    "404": {
+      "code": "404",
+      "name": "Not Found",
+      "category": "客户端错误",
+      "problem_category": [
+        "前端",
+        "后端"
+      ],
+      "next_step": "Postman 验证后端是否存在该接口",
+      "description": "接口不存在。需区分前端路径写错还是后端接口未开发。",
+      "memory": "404 → 路径错误 or 未开发（需验证）",
+      "typical": [
+        "前端路径错误",
+        "接口未开发",
+        "接口被删除"
+      ]
+    },
+    "405": {
+      "code": "405",
+      "name": "Method Not Allowed",
+      "category": "客户端错误",
+      "problem_category": [
+        "后端"
+      ],
+      "next_step": "检查请求方法与后端控制器映射",
+      "description": "请求方法不被允许。前端传错方法或后端未配置该方法。",
+      "memory": "405 → GET/POST 用错或未实现",
+      "typical": [
+        "GET/POST 用错",
+        "方法未实现",
+        "预检请求 405"
+      ]
+    },
+    "406": {
+      "code": "406",
+      "name": "Not Acceptable",
+      "category": "客户端错误",
+      "problem_category": [
+        "前端",
+        "配置"
+      ],
+      "next_step": "检查 Accept 请求头与响应格式",
+      "description": "服务器无法按客户端要求的格式返回。多为 Accept 头或响应格式配置问题。",
+      "memory": "406 → Accept 头与响应格式不匹配",
+      "typical": [
+        "Accept 头错误",
+        "响应格式不支持"
+      ]
+    },
+    "408": {
+      "code": "408",
+      "name": "Request Timeout",
+      "category": "客户端错误",
+      "problem_category": [
+        "网络",
+        "后端"
+      ],
+      "next_step": "检查网络延迟与后端超时配置",
+      "description": "请求超时。网络慢或后端处理超过超时时间。",
+      "memory": "408 → 请求超时，查网络与超时配置",
+      "typical": [
+        "网络延迟高",
+        "后端处理超时"
+      ]
+    },
+    "409": {
+      "code": "409",
+      "name": "Conflict",
+      "category": "客户端错误",
+      "problem_category": [
+        "后端",
+        "数据库"
+      ],
+      "next_step": "检查日志与数据库约束",
+      "description": "资源冲突。唯一约束冲突、版本冲突或重复提交。",
+      "memory": "409 → 冲突，查约束与重复数据",
+      "typical": [
+        "唯一约束冲突",
+        "版本冲突",
+        "重复提交"
+      ]
+    },
+    "410": {
+      "code": "410",
+      "name": "Gone",
+      "category": "客户端错误",
+      "problem_category": [
+        "后端",
+        "前端"
+      ],
+      "next_step": "确认资源是否已下线，更新前端 URL",
+      "description": "资源已被永久删除。前端仍在调用已下线的资源。",
+      "memory": "410 → 资源已删除，清理前端调用",
+      "typical": [
+        "资源已下线",
+        "旧版本接口"
+      ]
+    },
+    "411": {
+      "code": "411",
+      "name": "Length Required",
+      "category": "客户端错误",
+      "problem_category": [
+        "前端",
+        "配置"
+      ],
+      "next_step": "补齐 Content-Length，或确认代理是否改写为 chunked",
+      "description": "请求缺少 Content-Length，服务端无法确定请求体长度而拒收。常见于手写请求、chunked 传输或代理未补长度。",
+      "memory": "411 → 缺 Content-Length",
+      "typical": [
+        "请求体长度未知",
+        "chunked 传输被拒",
+        "代理未补长度"
+      ]
+    },
+    "412": {
+      "code": "412",
+      "name": "Precondition Failed",
+      "category": "客户端错误",
+      "problem_category": [
+        "业务",
+        "后端"
+      ],
+      "next_step": "重新拉取最新数据与版本号后再提交（别用缓存的旧版本）",
+      "description": "条件请求校验失败：If-Match / If-Unmodified-Since 与服务端当前版本不一致，说明数据在你操作前已被别人改过。属并发控制生效，不是接口故障。",
+      "memory": "412 → 版本冲突，重新拉最新再提交",
+      "typical": [
+        "并发修改覆盖",
+        "乐观锁冲突",
+        "版本号过期"
+      ]
+    },
+    "413": {
+      "code": "413",
+      "name": "Payload Too Large",
+      "category": "客户端错误",
+      "problem_category": [
+        "后端",
+        "配置"
+      ],
+      "next_step": "检查文件大小与上传配置",
+      "description": "请求体过大。超过后端或 Nginx 配置的上传大小限制。",
+      "memory": "413 → 文件超限，查配置",
+      "typical": [
+        "文件超过配置",
+        "请求体过大",
+        "Nginx 限制"
+      ]
+    },
+    "414": {
+      "code": "414",
+      "name": "URI Too Long",
+      "category": "客户端错误",
+      "problem_category": [
+        "前端",
+        "配置"
+      ],
+      "next_step": "检查是否把大参数放在 query 里；确认网关 URI 长度上限",
+      "description": "URL 太长：参数放在 query 中且体积过大（批量 id、超长 token、base64 内容），超过服务端 URI 长度上限。",
+      "memory": "414 → URL 太长，改 POST 传参",
+      "typical": [
+        "批量 id 放 URL",
+        "token 放 URL",
+        "Nginx URI 上限小"
+      ]
+    },
+    "415": {
+      "code": "415",
+      "name": "Unsupported Media Type",
+      "category": "客户端错误",
+      "problem_category": [
+        "前端",
+        "配置"
+      ],
+      "next_step": "检查 Content-Type 请求头",
+      "description": "请求媒体类型不受支持。前端 Content-Type 设置错误或上传格式不支持。",
+      "memory": "415 → Content-Type 错误",
+      "typical": [
+        "Content-Type 错误",
+        "上传格式不支持"
+      ]
+    },
+    "416": {
+      "code": "416",
+      "name": "Range Not Satisfiable",
+      "category": "客户端错误",
+      "problem_category": [
+        "前端",
+        "配置"
+      ],
+      "next_step": "重新获取文件大小后再续传，清掉过期的断点记录",
+      "description": "Range 请求越界：请求的字节区间超出文件实际大小。多为文件被替换、断点续传记录过期、前端缓存的文件大小不对。",
+      "memory": "416 → 范围越界，文件大小不一致",
+      "typical": [
+        "断点续传记录过期",
+        "文件被替换",
+        "视频拖动越界"
+      ]
+    },
+    "417": {
+      "code": "417",
+      "name": "Expectation Failed",
+      "category": "客户端错误",
+      "problem_category": [
+        "配置",
+        "后端",
+        "数据库"
+      ],
+      "next_step": "去掉 Expect 头重试；若响应体带业务码，按业务错误继续排查",
+      "description": "服务端无法满足请求头里的 Expect 期望（多为 Expect: 100-continue）。注意：部分网关/框架会把业务异常（如 selectOne 查到多行）也映射成 417，此时必须看响应体的业务码而不是只看状态码。",
+      "memory": "417 → 先看响应体业务码，再判是 Expect 还是业务异常",
+      "typical": [
+        "Expect 头不被支持",
+        "业务异常被映射为 417",
+        "selectOne 返回多行"
+      ]
+    },
+    "418": {
+      "code": "418",
+      "name": "I'm a Teapot",
+      "category": "客户端错误",
+      "problem_category": [
+        "配置",
+        "业务"
+      ],
+      "next_step": "确认该地址是否为占位/彩蛋接口，或是否被风控策略拦截",
+      "description": "服务端主动拒绝服务的非标准状态码，多为反爬/风控策略或调试占位接口，不具备标准语义。",
+      "memory": "418 → 主动拒绝，查风控或占位接口",
+      "typical": [
+        "反爬拦截",
+        "调试占位接口",
+        "风控策略拒绝"
+      ]
+    },
+    "421": {
+      "code": "421",
+      "name": "Misdirected Request",
+      "category": "客户端错误",
+      "problem_category": [
+        "配置",
+        "网络"
+      ],
+      "next_step": "核对网关 SNI / server_name 分流配置，必要时关闭连接复用",
+      "description": "HTTP/2 连接复用到了不该处理该域名的后端（SNI/Host 不匹配），属网关按域名分流的配置问题。",
+      "memory": "421 → 连接复用到错误后端，查 SNI 分流",
+      "typical": [
+        "多域名共用网关",
+        "SNI 配置错误",
+        "连接复用串了后端"
+      ]
+    },
+    "422": {
+      "code": "422",
+      "name": "Unprocessable Entity",
+      "category": "客户端错误",
+      "problem_category": [
+        "后端",
+        "前端"
+      ],
+      "next_step": "检查参数校验规则与错误详情",
+      "description": "参数语义错误（校验失败）。与 400 类似，多为字段级校验失败。",
+      "memory": "422 → 参数校验失败",
+      "typical": [
+        "字段校验失败",
+        "JSON 格式错误",
+        "参数绑定失败"
+      ]
+    },
+    "423": {
+      "code": "423",
+      "name": "Locked",
+      "category": "客户端错误",
+      "problem_category": [
+        "业务",
+        "数据库"
+      ],
+      "next_step": "查询锁持有者，确认是否为异常遗留锁；补锁超时自动释放",
+      "description": "目标资源被锁：同一记录已有人在编辑（编辑锁 / 审批中 / WebDAV 锁），本次写操作被拒。",
+      "memory": "423 → 资源被锁，查谁持有锁",
+      "typical": [
+        "并发编辑同一记录",
+        "遗留锁未释放",
+        "审批中禁止修改"
+      ]
+    },
+    "424": {
+      "code": "424",
+      "name": "Failed Dependency",
+      "category": "客户端错误",
+      "problem_category": [
+        "后端",
+        "业务"
+      ],
+      "next_step": "先找到同批次里第一个失败的请求，修它",
+      "description": "当前请求因依赖的另一个请求失败而失败（批量 / 事务型调用链），根因在上游那个请求。",
+      "memory": "424 → 依赖项失败，找上游第一个错",
+      "typical": [
+        "批量操作部分失败",
+        "事务链上游失败",
+        "依赖服务不可用"
+      ]
+    },
+    "425": {
+      "code": "425",
+      "name": "Too Early",
+      "category": "客户端错误",
+      "problem_category": [
+        "网络",
+        "配置"
+      ],
+      "next_step": "关闭 TLS 0-RTT 早期数据后重试",
+      "description": "服务端出于重放保护拒绝了 TLS 1.3 早期数据（0-RTT），请求被丢弃或要求重发。",
+      "memory": "425 → 0-RTT 被拒，关掉早期数据",
+      "typical": [
+        "TLS 1.3 0-RTT 被拒",
+        "偶发首次请求失败",
+        "重放保护"
+      ]
+    },
+    "426": {
+      "code": "426",
+      "name": "Upgrade Required",
+      "category": "客户端错误",
+      "problem_category": [
+        "配置",
+        "网络"
+      ],
+      "next_step": "按响应 Upgrade 头补齐要求（多为改用 HTTPS 或提高 TLS 版本）",
+      "description": "服务端要求升级协议：强制 HTTPS、TLS 版本过低或要求 HTTP/2，响应里通常给出 Upgrade 头说明要求。",
+      "memory": "426 → 要求升级协议，看 Upgrade 头",
+      "typical": [
+        "强制 HTTPS",
+        "TLS 版本过低",
+        "要求 HTTP/2"
+      ]
+    },
+    "428": {
+      "code": "428",
+      "name": "Precondition Required",
+      "category": "客户端错误",
+      "problem_category": [
+        "后端",
+        "业务"
+      ],
+      "next_step": "先 GET 拿 ETag / 版本号，写请求带上 If-Match",
+      "description": "服务端强制要求带条件头（If-Match / If-None-Match）以防并发覆盖，客户端没带所以被拒。",
+      "memory": "428 → 服务端要求条件请求，补 If-Match",
+      "typical": [
+        "强制防并发覆盖",
+        "缺少 ETag",
+        "写请求被要求带条件头"
+      ]
+    },
+    "429": {
+      "code": "429",
+      "name": "Too Many Requests",
+      "category": "客户端错误",
+      "problem_category": [
+        "后端",
+        "性能"
+      ],
+      "next_step": "检查限流配置（Redis 限流）",
+      "description": "请求频率过高，触发限流。需等待或调整限流配置。",
+      "memory": "429 → 限流，等一会或加权限",
+      "typical": [
+        "限流触发",
+        "并发过高",
+        "IP 被封"
+      ]
+    },
+    "431": {
+      "code": "431",
+      "name": "Request Header Fields Too Large",
+      "category": "客户端错误",
+      "problem_category": [
+        "前端",
+        "配置",
+        "认证"
+      ],
+      "next_step": "检查 Cookie / Token 体积；确认网关请求头缓冲区上限",
+      "description": "请求头体积超限：Cookie 累积过多、JWT 过长（塞了大量权限信息）或被塞入大字段，被服务端或网关直接拒绝。",
+      "memory": "431 → 请求头过大，清 Cookie 或调大缓冲",
+      "typical": [
+        "Cookie 累积过多",
+        "JWT 太长",
+        "Nginx 头缓冲过小"
+      ]
+    },
+    "451": {
+      "code": "451",
+      "name": "Unavailable For Legal Reasons",
+      "category": "客户端错误",
+      "problem_category": [
+        "业务",
+        "配置"
+      ],
+      "next_step": "核对是否命中合规/地域策略，找安全合规确认放行范围",
+      "description": "请求因合规/法务策略被拦截（数据出境限制、审计封禁、地域限制），属策略性拒绝而非技术故障。",
+      "memory": "451 → 合规策略拦截",
+      "typical": [
+        "数据出境受限",
+        "地域限制",
+        "审计封禁"
+      ]
+    },
+    "500": {
+      "code": "500",
+      "name": "Internal Server Error",
+      "category": "服务端错误",
+      "problem_category": [
+        "后端",
+        "数据库"
+      ],
+      "next_step": "查看后端日志堆栈（必做）",
+      "description": "服务器内部错误。后端代码异常，需查看日志定位。",
+      "memory": "500 → 后端问题，查日志",
+      "typical": [
+        "SQL 异常",
+        "空指针",
+        "连接拒绝",
+        "OOM",
+        "代码逻辑错误"
+      ]
+    },
+    "501": {
+      "code": "501",
+      "name": "Not Implemented",
+      "category": "服务端错误",
+      "problem_category": [
+        "后端"
+      ],
+      "next_step": "确认后端是否实现该方法",
+      "description": "服务器不支持请求方法/功能。后端未实现。",
+      "memory": "501 → 功能未实现",
+      "typical": [
+        "HTTP 方法不支持"
+      ]
+    },
+    "502": {
+      "code": "502",
+      "name": "Bad Gateway",
+      "category": "服务端错误",
+      "problem_category": [
+        "服务"
+      ],
+      "next_step": "检查后端进程与 Nginx 配置",
+      "description": "网关无法连接后端服务。多为后端服务崩溃或端口错误。",
+      "memory": "502 → 后端服务挂了，重启",
+      "typical": [
+        "后端崩溃",
+        "Nginx 配置错误",
+        "后端端口错误"
+      ]
+    },
+    "503": {
+      "code": "503",
+      "name": "Service Unavailable",
+      "category": "服务端错误",
+      "problem_category": [
+        "服务"
+      ],
+      "next_step": "检查服务状态与过载情况",
+      "description": "服务暂时不可用。维护中或过载。",
+      "memory": "503 → 服务维护/过载",
+      "typical": [
+        "服务维护",
+        "服务过载"
+      ]
+    },
+    "504": {
+      "code": "504",
+      "name": "Gateway Timeout",
+      "category": "服务端错误",
+      "problem_category": [
+        "性能"
+      ],
+      "next_step": "检查慢 SQL 与网关超时配置",
+      "description": "网关超时。后端处理超过网关超时时间，多为慢查询。",
+      "memory": "504 → 后端超时，查慢 SQL",
+      "typical": [
+        "慢 SQL",
+        "网关超时短",
+        "第三方接口超时",
+        "服务卡死"
+      ]
+    },
+    "505": {
+      "code": "505",
+      "name": "HTTP Version Not Supported",
+      "category": "服务端错误",
+      "problem_category": [
+        "网络"
+      ],
+      "next_step": "升级浏览器或客户端",
+      "description": "HTTP 版本不支持。客户端太旧或服务器不支持该协议版本。",
+      "memory": "505 → HTTP 版本不支持，升级浏览器",
+      "typical": [
+        "浏览器过旧",
+        "协议版本不兼容"
+      ]
+    },
+    "506": {
+      "code": "506",
+      "name": "Variant Also Negotiates",
+      "category": "服务端错误",
+      "problem_category": [
+        "配置"
+      ],
+      "next_step": "检查网关/Web 服务器的 Content-Type 与协商映射配置",
+      "description": "内容协商配置错误：协商出的变体自身又被配置为可协商资源，形成自指。属服务端配置问题。",
+      "memory": "506 → 内容协商配置自指",
+      "typical": [
+        "协商映射配置错",
+        "AddType 配错",
+        "返回类型指向自身"
+      ]
+    },
+    "507": {
+      "code": "507",
+      "name": "Insufficient Storage",
+      "category": "服务端错误",
+      "problem_category": [
+        "服务",
+        "配置"
+      ],
+      "next_step": "df -h 看磁盘；清理日志与临时文件；检查对象存储配额",
+      "description": "存储不足：本机磁盘写满（日志、上传目录、数据库数据盘）或对象存储配额超限，写操作被拒。",
+      "memory": "507 → 存储不足，先看磁盘和配额",
+      "typical": [
+        "磁盘写满",
+        "日志未清理",
+        "对象存储配额超限"
+      ]
+    },
+    "508": {
+      "code": "508",
+      "name": "Loop Detected",
+      "category": "服务端错误",
+      "problem_category": [
+        "配置"
+      ],
+      "next_step": "用 curl.exe -v -L 看跳转链，找出环",
+      "description": "网关检测到循环：重定向 A→B→A，或目录依赖成环（WebDAV），请求被主动中止以免耗尽资源。",
+      "memory": "508 → 检测到循环，查跳转链",
+      "typical": [
+        "重定向成环",
+        "rewrite 规则互相指向",
+        "baseURL 与网关前缀叠加"
+      ]
+    },
+    "510": {
+      "code": "510",
+      "name": "Not Extended",
+      "category": "服务端错误",
+      "problem_category": [
+        "配置"
+      ],
+      "next_step": "看响应头是否给出所需扩展，按服务端要求补齐",
+      "description": "服务端要求按 HTTP 扩展框架补充扩展信息，客户端未提供。老框架或定制网关中较常见。",
+      "memory": "510 → 扩展要求未满足",
+      "typical": [
+        "老框架扩展要求",
+        "定制网关策略",
+        "缺少扩展头"
+      ]
+    },
+    "511": {
+      "code": "511",
+      "name": "Network Authentication Required",
+      "category": "服务端错误",
+      "problem_category": [
+        "网络",
+        "认证"
+      ],
+      "next_step": "先在浏览器触发认证门户完成登录；对照其它网络复测",
+      "description": "网络层要求先完成认证（企业 WiFi 门户、上网准入、代理认证），请求在到达业务前被网络设备拦截。",
+      "memory": "511 → 网络准入未完成，先过认证门户",
+      "typical": [
+        "企业 WiFi 门户认证",
+        "上网准入掉线",
+        "代理认证过期"
+      ]
+    }
+  }
+}
